@@ -11,4 +11,4 @@
 
 新增 vitest.config.js 避免嵌套上游继承根应用仅匹配 TypeScript 测试的配置；同时包含上游 .test.js 和 .test.mjs。package-lock 的 npm 安装变动已保留，不通过 reset 丢弃。
 
-upstream/ignis 当前保留嵌套 Git 元数据用于追溯来源，根应用尚未初始化源码 Git 仓库。将来发布网页程序时，需明确采用带本地补丁的 vendored source 或维护独立 fork；不能仅添加未包含补丁的 gitlink，也不能把官方 Obsidian 解包资源加入 Git。
+upstream/ignis 已移除嵌套 Git 元数据，并以 vendored source 方式纳入当前源码仓库；固定版本、许可证和本地集成补丁均随根仓库保存。上游来源仍通过版本号与提交哈希追溯，官方 Obsidian 解包资源不加入 Git。

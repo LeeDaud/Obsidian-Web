@@ -17,7 +17,7 @@
 - 规则变更同步 AGENTS.md；用户当前明确授权优先于通用规则。
 
 ## 目录与管理
-- upstream/ignis/：固定版本原项目源码及许可证，当前保留嵌套 Git 来源；src/client/ 等已授权的旧独立前端已经移除。
+- upstream/ignis/：固定版本原项目源码、许可证及本项目集成补丁，已作为 vendored source 纳入当前仓库，不保留嵌套 Git 元数据；src/client/ 等已授权的旧独立前端已经移除。
 - src/server/：当前笔记 API、受限临时存储、GitHub 投递与版本核验。
 - tests/：保存、恢复、并发及同步行为测试；只使用临时测试数据。
 - docs/plan/：实施计划；docs/todo/：确认后的执行清单；docs/setup/：仓库与部署指南。
