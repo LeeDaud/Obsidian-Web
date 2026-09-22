@@ -1,0 +1,57 @@
+services:
+  echo:
+    image: echo-capture:20260921
+    container_name: echo-capture
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 45s
+    mem_limit: 512m
+    cpus: 1.0
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    environment:
+      NODE_ENV: production
+      PORT: "4319"
+      CAPTURE_HOST: 0.0.0.0
+      CAPTURE_ORIGIN: https://echo.leedaud.xyz
+      CAPTURE_DATA_DIR: /data
+      OBSIDIAN_ASSETS_PATH: /obsidian
+      GITHUB_REPOSITORY: LeeDaud/Echo
+      GITHUB_BRANCH: main
+      GITHUB_SYNC_ENABLED: "true"
+    volumes:
+      - /opt/echo/data:/data
+      - /opt/echo/obsidian:/obsidian:ro
+      - /opt/echo/locks:/locks
+    secrets:
+      - github_token
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "const http=require('http');const q=http.get({hostname:'127.0.0.1',port:4319,path:'/api/capture/status',headers:{Host:'echo.leedaud.xyz'}},r=>{r.resume();process.exit(r.statusCode===200?0:1)});q.setTimeout(5000,()=>q.destroy());q.on('error',()=>process.exit(1));"
+      interval: 30s
+      timeout: 8s
+      start_period: 30s
+      retries: 3
+    networks:
+      - existing_proxy
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "2"
+secrets:
+  github_token:
+    file: /opt/echo/secrets/github_token
+networks:
+  existing_proxy:
+    external: true
+    name: vaultwarden_vaultwarden-net
+
