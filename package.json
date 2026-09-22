@@ -1,0 +1,33 @@
+{
+  "name": "echo-capture",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.14.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server/main.ts",
+    "dev:server": "tsx src/server/main.ts",
+    "build": "tsc --noEmit && npm --prefix upstream/ignis run build",
+    "typecheck": "tsc --noEmit",
+    "start": "tsx src/server/main.ts",
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "check": "npm run typecheck && npm test && npm run build",
+    "test:upstream": "npm --prefix upstream/ignis test"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "tsx": "^4.20.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.14.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.4.0",
+    "vitest": "4.1.11"
+  }
+}
+
