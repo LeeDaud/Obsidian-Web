@@ -15,6 +15,7 @@ export class MemoryRemote implements Remote {
 }
 export class FakeGitHub {
   blobs = new Map<string, string>();
+  binaryBlobs = new Map<string, Buffer>();
   trees = new Map<string, Record<string, string>>([['tree0', {}]]);
   commits = new Map<string, { tree: { sha: string }; parents: string[] }>([['head0', { tree: { sha: 'tree0' }, parents: [] }]]);
   head = 'head0';
@@ -49,7 +50,21 @@ export class FakeGitHub {
       return json({ status: cursor ? head === base ? 'identical' : 'ahead' : 'diverged' });
     }
     if (route.startsWith('/git/commits/') && init?.method === 'GET') return json(this.commits.get(route.slice('/git/commits/'.length)));
+    if (route.startsWith('/git/trees/') && init?.method === 'GET') {
+      const entries = this.trees.get(route.slice('/git/trees/'.length));
+      return json({ truncated: false, tree: Object.entries(entries ?? {}).map(([path, sha]) => ({ path, sha, type: 'blob', mode: '100644' })) });
+    }
+    if (route.startsWith('/git/blobs/') && init?.method === 'GET') {
+      const sha = route.slice('/git/blobs/'.length);
+      const bytes = this.binaryBlobs.get(sha) ?? Buffer.from(this.blobs.get(sha) ?? '');
+      return json({ sha, encoding: 'base64', size: bytes.length, content: bytes.toString('base64') });
+    }
     if (route === '/git/blobs') {
+      if (body.encoding === 'base64') {
+        const bytes = Buffer.from(body.content, 'base64');
+        const sha = createHash('sha1').update(Buffer.concat([Buffer.from(`blob ${bytes.length}\0`), bytes])).digest('hex');
+        this.binaryBlobs.set(sha, bytes); return json({ sha });
+      }
       const sha = createHash('sha1').update(body.content).digest('hex'); this.blobs.set(sha, body.content); return json({ sha });
     }
     if (route === '/git/trees') {
