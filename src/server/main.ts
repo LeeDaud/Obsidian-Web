@@ -7,6 +7,7 @@ import { NoteStore } from './store';
 import { CaptureVault } from './vault';
 import { GitHubRemote } from './github';
 import { DeliveryWorker } from './worker';
+import { SubmissionQueue } from './memos/queue';
 import type { IncomingMessage } from 'node:http';
 import type express from 'express';
 
@@ -35,6 +36,11 @@ const vaultRoot = path.join(runtime, 'vaults');
 await mkdir(vaultRoot, { recursive: true });
 if ((await readdir(vaultRoot)).some(n => n !== 'Inbox')) throw new Error('临时目录仅允许 Inbox，不能加载其他库。');
 const vault = new CaptureVault(store, path.join(vaultRoot, 'Inbox'));
+const memosQueueDir = process.env.MEMOS_QUEUE_DIR;
+const memosToken = process.env.MEMOS_BRIDGE_TOKEN;
+if (!!memosQueueDir !== !!memosToken) throw new Error('MEMOS_QUEUE_DIR 与 MEMOS_BRIDGE_TOKEN 必须同时配置。');
+if (memosToken && memosToken.length < 32) throw new Error('MEMOS_BRIDGE_TOKEN 至少需要 32 个字符。');
+const memosQueue = memosQueueDir ? await SubmissionQueue.create(memosQueueDir, project) : undefined;
 const enabled = process.env.GITHUB_SYNC_ENABLED === 'true';
 const repository = process.env.GITHUB_REPOSITORY ?? '';
 const branch = process.env.GITHUB_BRANCH ?? 'main';
@@ -58,7 +64,8 @@ await writeFile(path.join(settingsDir, 'core-plugins.json'), JSON.stringify(['fi
 await writeFile(path.join(settingsDir, 'community-plugins.json'), '[]');
 const [owner, repo] = repository.split('/');
 const worker = enabled ? new DeliveryWorker(store, new GitHubRemote({ owner, repo, branch, token: process.env.GITHUB_TOKEN! })) : undefined;
-const config: AppConfig = { vault, syncEnabled: enabled, origin, project };
+const config: AppConfig = { vault, syncEnabled: enabled, origin, project,
+  memos: memosQueue ? { queue: memosQueue, token: memosToken! } : undefined };
 let running: Promise<void> | undefined;
 const tick = () => {
   if (running) return;
@@ -71,7 +78,7 @@ Object.assign(process.env, { VAULT_ROOT: vaultRoot, DATA_ROOT: path.join(runtime
 Object.assign(globalThis, { __ignisCapture: {
   guard: guard(config), mount: (app: express.Express) => mount(app, config), errors: errors(),
   verifyClient: ({ req, origin: wsOrigin }: { req: IncomingMessage; origin: string }) => authorized(req, config) && wsOrigin === origin,
-  stop: async () => { clearInterval(interval); await running; await worker?.waitForIdle(); await lock.close(); await unlink(path.join(store.root, 'instance.lock')); }
+  stop: async () => { clearInterval(interval); await running; await worker?.waitForIdle(); await memosQueue?.close(); await lock.close(); await unlink(path.join(store.root, 'instance.lock')); }
 } });
 console.info('Ignis 原版输入入口：' + origin + '；GitHub 投递' + (enabled ? '已启用' : '未启用'));
 createRequire(import.meta.url)(path.join(project, 'upstream/ignis/apps/ignis-server/server/index.js'));
