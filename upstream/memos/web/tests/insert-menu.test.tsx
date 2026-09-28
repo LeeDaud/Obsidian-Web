@@ -103,7 +103,13 @@ describe("InsertMenu", () => {
 
     render(
       <EditorProvider initialEditorState={state}>
-        <EditorToolbar onSave={vi.fn()} onAudioRecorderClick={vi.fn()} viewToggles={viewToggles} onInsertImages={vi.fn()} />
+        <EditorToolbar
+          onSave={vi.fn()}
+          onDraft={vi.fn()}
+          onAudioRecorderClick={vi.fn()}
+          viewToggles={viewToggles}
+          onInsertImages={vi.fn()}
+        />
       </EditorProvider>,
     );
 

@@ -65,6 +65,7 @@ export interface EditorViewToggles {
 
 export interface EditorToolbarProps {
   onSave: () => void;
+  onDraft: () => void;
   onCancel?: () => void;
   memoName?: string;
   /** Set when the editor composes a comment on this memo; picks the commit verb. */

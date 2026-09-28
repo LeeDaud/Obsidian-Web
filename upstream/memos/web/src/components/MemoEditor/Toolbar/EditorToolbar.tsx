@@ -1,4 +1,4 @@
-import { CheckIcon, CornerDownLeftIcon, LoaderIcon } from "lucide-react";
+import { ArchiveIcon, CheckIcon, CornerDownLeftIcon, LoaderIcon, SaveIcon } from "lucide-react";
 import type { FC } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -11,6 +11,8 @@ import { useEditorContext, useEditorSelector } from "../state";
 import type { EditorToolbarProps } from "../types";
 import InsertMenu from "./InsertMenu";
 import VisibilitySelector from "./VisibilitySelector";
+
+const PRIMARY_ACTION_BUTTON_CLASSES = "min-h-11 min-w-24 gap-1.5";
 
 /**
  * Shortcut chip inside the commit button. While saving, a spinner takes the
@@ -32,6 +34,7 @@ const ShortcutChip: FC<{ busy: boolean }> = ({ busy }) => (
 
 export const EditorToolbar: FC<EditorToolbarProps> = ({
   onSave,
+  onDraft,
   onCancel,
   memoName,
   parentMemoName,
@@ -76,12 +79,13 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   };
 
   const commitButton = justSaved ? (
-    <Button size="sm" disabled>
+    <Button size="sm" className={PRIMARY_ACTION_BUTTON_CLASSES} disabled>
       {t("editor.saved")}
       <CheckIcon className="size-3.5" strokeWidth={2.5} />
     </Button>
   ) : (
-    <Button size="sm" onClick={onSave} disabled={isSaving || !valid}>
+    <Button size="sm" className={PRIMARY_ACTION_BUTTON_CLASSES} onClick={onSave} disabled={isSaving || !valid} aria-label={commitLabel}>
+      <SaveIcon className="size-4" />
       {commitLabel}
       <ShortcutChip busy={isSaving} />
     </Button>
@@ -105,6 +109,10 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
       </div>
 
       <div className="flex flex-row items-center justify-end gap-1">
+        <Button size="sm" className={PRIMARY_ACTION_BUTTON_CLASSES} onClick={onDraft} disabled={committing} aria-label="暂存到当前设备">
+          <ArchiveIcon className="size-4" />
+          暂存
+        </Button>
         {onCancel && (
           <Button variant="quiet" size="sm" onClick={onCancel} disabled={committing}>
             {t("common.cancel")}

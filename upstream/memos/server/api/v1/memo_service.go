@@ -75,6 +75,11 @@ func (s *APIV1Service) CreateMemo(ctx context.Context, request *v1pb.CreateMemoR
 	s.SSEHub.publishMemoChanged()
 
 	s.dispatchMemoMentionNotificationsBestEffort(ctx, memo, nil, "")
+	if s.MemoSaved != nil {
+		if err := s.MemoSaved(context.WithoutCancel(ctx), user.ID, memo.UID); err != nil {
+			slog.Warn("failed to enqueue saved memo for Echo", slog.String("memo_uid", memo.UID), slog.Any("error", err))
+		}
+	}
 
 	return memoMessage, nil
 }
@@ -483,6 +488,11 @@ func (s *APIV1Service) UpdateMemo(ctx context.Context, request *v1pb.UpdateMemoR
 		s.dispatchMemoMentionNotificationsBestEffort(ctx, memo, commentContext, previousContent)
 	}
 	s.dispatchMemoUpdatedSideEffects(ctx, memoMessage)
+	if s.MemoSaved != nil && (contentUpdated || attachmentsUpdated) {
+		if err := s.MemoSaved(context.WithoutCancel(ctx), user.ID, memo.UID); err != nil {
+			slog.Warn("failed to enqueue saved memo for Echo", slog.String("memo_uid", memo.UID), slog.Any("error", err))
+		}
+	}
 
 	return memoMessage, nil
 }

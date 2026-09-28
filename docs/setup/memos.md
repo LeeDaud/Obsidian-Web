@@ -13,7 +13,7 @@
 - `upstream/memos/` 仅存固定源码、本地补丁和构建输入；`node_modules`、`web/dist` 等仍按项目忽略规则处理。
 - `src/server/memos/` 存 Echo 侧的显式提交队列和快照校验，不直接读写 Memos 数据库。
 - `tests/memos/` 只使用系统临时目录与模拟 GitHub；不触碰真实笔记或真实仓库。
-- 运行时必须显式提供项目外的独占队列目录；目录含未知文件、符号链接或被另一进程占用时拒绝启动。当前模块没有接入生产启动入口。
+- 运行时必须显式提供项目外的独占队列目录；目录含未知文件、符号链接或被另一进程占用时拒绝启动。生产目录为 `/opt/memos/echo-queue`，由 Echo 容器独占。
 
 ## 已验证基线（2026-09-28）
 
@@ -24,8 +24,11 @@
 - 隔离实例绑定 `127.0.0.1:5231`，数据目录为系统临时目录；`/healthz` 返回 200 和 `Service ready.`，根页面返回 200，包含 React 根节点和模块脚本，不再出现 `No embeddable frontend found.`。当前本机进程仅供后续合成验收，不构成生产部署。
 - 根项目 `npm run typecheck`、31 项应用测试及 `npm run build` 通过。
 - Memos mock/dry-run 覆盖：正文和附件单次 Git 提交、二进制逐字节核验、提交前持久检查点、丢回执恢复、并发分支保护、远端移动/改写保护、显式幂等提交、版本顺序、队列重启和进程排他。没有调用真实 GitHub。
-- Echo 已增加 `/api/memos/internal/submissions` 提交及状态查询端点，仅在 `MEMOS_QUEUE_DIR` 与 `MEMOS_BRIDGE_TOKEN` 同时配置时启用。服务端 bearer 凭据至少 32 字符，队列必须是项目外独占目录；该开关与 Echo 的 `GITHUB_SYNC_ENABLED` 分离，当前没有生产配置。
+- Echo 已增加 `/api/memos/internal/submissions` 提交及状态查询端点，仅在 `MEMOS_QUEUE_DIR` 与 `MEMOS_BRIDGE_TOKEN` 同时配置时启用。服务端 bearer 凭据至少 32 字符，队列必须是项目外独占目录；接口与独立 `MEMOS_GITHUB_SYNC_ENABLED` worker 均已在生产启用。
 - 内部端点接受受限的正文/附件快照，成功响应只包含 submission ID、状态和修订号，不回传正文。无凭据和错误凭据、幂等重试、按 owner 查询隔离已有自动测试；根项目最新 33 项测试、类型检查和构建通过。
+- Memos 后端新增默认关闭的 Echo bridge。只有 URL、至少 32 字符服务 token 与规范化 instance URL 同时配置时才启用；原生 Memo 菜单随后显示“投递到 Obsidian”。点击操作使用现有 Memos 登录令牌或刷新 cookie，后端重新读取 memo 并核验 creator，浏览器不获得 bridge token。
+- 首期 bridge 只提交非空 Markdown 正文，使用 memo 创建时间生成候选路径、内容摘要生成幂等 submission ID、更新时间作为安全递增版本。Echo 对不同 memo 的同秒候选路径自动递增秒数，并在重试时保留首次分配；附件尚未组装，状态尚未持久显示。
+- 最新验证：Echo 类型检查、34 项应用测试和构建通过；Memos bridge 定向 Go 测试、前端 lint/typecheck、受影响菜单 9 项测试及生产构建通过。Memos 全部 server 包测试在 Windows 出现 8 项临时 SQLite 文件无法删除，其中 api/v1/test 1 项、frontend 7 项；失败发生于 `TempDir RemoveAll`，不是 bridge 断言失败，Linux/容器仍需复跑。
 - 原 Echo 浏览器回归已尝试，但所选旧 Obsidian 资源目录无法完成 `__captureReady`，10 项均在启动等待处超时；这不是功能断言失败，仍须找到正确资源路径后重跑。
 
 ## 源码审计结论
@@ -37,4 +40,4 @@
 
 ## 当前未接通部分
 
-原生登录身份到 Echo 队列的受保护提交接口、显式投递按钮、编辑会话 fencing、条件清理、隔离实例浏览器验收、生产配置和真实投递均未完成。真实投递和清理保持关闭。
+文本身份中继、显式投递按钮、生产 HTTPS 域名、Echo 入队接口及 Memos → GitHub 文本投递均已上线。2026-09-28 合成 Memo `memos/An746PkDDqZEevQGrFm3um` 生成 `Memos/20260928-173655.md`，GitHub commit `9779cede3e3eb49af1f697f630b9a852607e296e`，按 commit 读取的正文与标识一致。附件快照、持久状态展示、编辑会话 fencing、条件清理及真实手机点击验收仍未完成；已核验记录继续保留。

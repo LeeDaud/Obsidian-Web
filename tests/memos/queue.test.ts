@@ -9,7 +9,7 @@ import { FakeGitHub } from '../fakes';
 
 const input = (revision = 1, content = '合成笔记'): Submission => ({
   instance: 'local', owner: 'users/test', memo: 'memos/test',
-  delivery: { submissionId: `submit-${revision}`, revision, files: [bundleFile('Memos/20260928-120000.md', Buffer.from(content))] },
+  delivery: { submissionId: `submit-${revision}`, revision, files: [bundleFile('00_Inbox/20260928-120000.md', Buffer.from(content))] },
 });
 async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'memos-queue-test-'));
@@ -19,16 +19,41 @@ async function fixture() {
   return { root, queue, fake, remote };
 }
 describe('explicit Memos submission queue', () => {
+  it('normalizes the rolling-upgrade Memos prefix to 00_Inbox', async () => {
+    const { queue } = await fixture();
+    const submission = input();
+    submission.delivery.files[0] = bundleFile('Memos/20260928-120000.md', Buffer.from('legacy prefix'));
+    try {
+      const record = await queue.enqueue(submission);
+      expect(record.delivery.files[0].path).toBe('00_Inbox/20260928-120000.md');
+    } finally { await queue.close(); }
+  });
+
   it('persists an immutable, idempotent snapshot and rejects reused IDs or stale revisions', async () => {
     const { root, queue } = await fixture();
     try {
       const submission = input(); await queue.enqueue(submission);
-      submission.delivery.files[0] = bundleFile('Memos/20260928-120000.md', Buffer.from('later'));
+      submission.delivery.files[0] = bundleFile('00_Inbox/20260928-120000.md', Buffer.from('later'));
       await expect(queue.enqueue(submission)).rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
       expect((await queue.enqueue(input())).state).toBe('pending');
       expect((await readdir(root)).filter(name => name.endsWith('.json'))).toHaveLength(1);
       await queue.enqueue(input(3));
       await expect(queue.enqueue(input(2))).rejects.toMatchObject({ code: 'VERSION_CONFLICT' });
+    } finally { await queue.close(); }
+  });
+
+  it('allocates adjacent timestamp paths for memos created in the same second and keeps them idempotent', async () => {
+    const { queue } = await fixture();
+    const first = input();
+    const second = input();
+    second.memo = 'memos/second';
+    second.delivery.submissionId = 'submit-second';
+    try {
+      const storedFirst = await queue.enqueue(first);
+      const storedSecond = await queue.enqueue(second);
+      expect(storedFirst.delivery.files[0].path).toBe('00_Inbox/20260928-120000.md');
+      expect(storedSecond.delivery.files[0].path).toBe('00_Inbox/20260928-120001.md');
+      expect((await queue.enqueue(second)).delivery.files[0].path).toBe('00_Inbox/20260928-120001.md');
     } finally { await queue.close(); }
   });
   it('does no delivery while disabled and never exposes another owner’s status', async () => {
@@ -68,7 +93,7 @@ describe('explicit Memos submission queue', () => {
     const { queue, fake, remote } = await fixture();
     try {
       await queue.enqueue(input()); await queue.deliver(remote, { enabled: true });
-      fake.edit('Memos/20260928-120000.md', 'edited on desktop');
+      fake.edit('00_Inbox/20260928-120000.md', 'edited on desktop');
       await queue.enqueue(input(2, 'new')); await queue.enqueue(input(3, 'newest'));
       await queue.deliver(remote, { enabled: true });
       expect(await queue.status(input(), 'submit-2')).toMatchObject({ state: 'conflict' });
@@ -76,11 +101,10 @@ describe('explicit Memos submission queue', () => {
       expect(fake.updates).toBe(1);
     } finally { await queue.close(); }
   });
-  it('rejects duplicate source paths, a second process and project-contained/private data directories', async () => {
+  it('rejects a second process and project-contained/private data directories', async () => {
     const { queue, root } = await fixture();
     try {
       await queue.enqueue(input());
-      await expect(queue.enqueue({ ...input(), memo: 'memos/other' })).rejects.toMatchObject({ code: 'PATH_CONFLICT' });
       await expect(SubmissionQueue.create(root, process.cwd())).rejects.toMatchObject({ code: 'EEXIST' });
       await expect(SubmissionQueue.create(process.cwd(), process.cwd())).rejects.toThrow('源码目录');
       const foreign = await mkdtemp(path.join(tmpdir(), 'memos-foreign-test-'));

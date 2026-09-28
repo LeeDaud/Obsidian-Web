@@ -3,6 +3,7 @@
 ## Memos 接入授权（2026-09-28）
 - 用户已确认 docs/plan/plan.md 的 Memos 临时收件箱方案，授权本地实现与合成数据验证，保留 Echo/Ignis。
 - Memos 原生手机网页增加显式投递，设备草稿不自动上传；原生手动保存仅暂存。新入口采用原生登录与私有访问，Echo 免登录策略不变。
+- 固定 Memos 上游已接入默认关闭的文本 bridge：服务端核验登录用户与 memo 所有权后调用 Echo，浏览器不得持有 bridge token；附件、状态持久化和清理尚未接通。
 - 清理需要正文/附件核验、原子版本检查和活动/不确定会话保护，失联不等于结束；新服务投递与清理默认关闭。
 - 新部署、凭据、数据库迁移和真实内容删除仍单独授权；实际进度见 todo。
 
@@ -38,4 +39,8 @@ CLAUDE.md 是本项目完整规则与事实来源。执行任务前完整读取�
 - 用户已明确授权直接部署 echo.leedaud.xyz。独立容器 echo-capture 已上线，HTTPS、原版编辑器、WebSocket、健康与崩溃恢复通过；现有 Vaultwarden 未重启且正常。
 - 部署代码位于 deploy/；服务器 /opt/echo；无凭据部署记录见 docs/setup/production.md。
 - 用户已确认完成电脑 Obsidian Git 配置。GitHub 自动投递已启用，Echo 合成笔记已完成服务器、GitHub 与电脑端真实验证。
+
+## Memos 正式入口（2026-09-28）
+- `memos.leedaud.xyz` 已通过 Caddy HTTPS 转发到独立 `echo-memos` 容器；实例为 private，公开注册关闭，Memos、Echo、Caddy 与 Vaultwarden 健康。
+- 服务端 bridge token 按容器 UID 使用独立 `0400` 文件；文本入队接口和 Memos → GitHub worker 已启用，真实合成 Markdown 已通过提交内容核验。附件、状态回显与条件清理仍关闭。
 

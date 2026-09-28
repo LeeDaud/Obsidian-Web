@@ -1,6 +1,6 @@
 services:
   echo:
-    image: echo-capture:20260921
+    image: echo-capture:20260928
     container_name: echo-capture
     init: true
     restart: unless-stopped
@@ -24,12 +24,16 @@ services:
       GITHUB_REPOSITORY: LeeDaud/Echo
       GITHUB_BRANCH: main
       GITHUB_SYNC_ENABLED: "true"
+      MEMOS_GITHUB_SYNC_ENABLED: "true"
+      MEMOS_QUEUE_DIR: /memos-queue
     volumes:
       - /opt/echo/data:/data
       - /opt/echo/obsidian:/obsidian:ro
       - /opt/echo/locks:/locks
+      - /opt/memos/echo-queue:/memos-queue
     secrets:
       - github_token
+      - memos_bridge_token_echo
     healthcheck:
       test:
         - CMD
@@ -47,9 +51,55 @@ services:
       options:
         max-size: 5m
         max-file: "2"
+  memos:
+    image: echo-memos:20260928
+    container_name: echo-memos
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 45s
+    mem_limit: 512m
+    cpus: 1.0
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    environment:
+      MEMOS_ADDR: 0.0.0.0
+      MEMOS_PORT: "5230"
+      MEMOS_DATA: /var/opt/memos
+      MEMOS_DRIVER: sqlite
+      MEMOS_INSTANCE_URL: https://memos.leedaud.xyz
+      MEMOS_ECHO_BRIDGE_URL: http://echo-capture:4319
+      MEMOS_ECHO_BRIDGE_HOST: echo.leedaud.xyz
+      MEMOS_RATE_LIMIT: "true"
+      MEMOS_TRUSTED_PROXIES: private
+    volumes:
+      - /opt/memos/data:/var/opt/memos
+    secrets:
+      - memos_bridge_token_memos
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:5230/healthz]
+      interval: 30s
+      timeout: 8s
+      start_period: 30s
+      retries: 3
+    networks:
+      - existing_proxy
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "2"
 secrets:
   github_token:
     file: /opt/echo/secrets/github_token
+  memos_bridge_token_echo:
+    file: /opt/memos/secrets/bridge_token_echo
+  memos_bridge_token_memos:
+    file: /opt/memos/secrets/bridge_token_memos
 networks:
   existing_proxy:
     external: true

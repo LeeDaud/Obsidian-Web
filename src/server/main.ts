@@ -42,9 +42,13 @@ if (!!memosQueueDir !== !!memosToken) throw new Error('MEMOS_QUEUE_DIR 与 MEMOS
 if (memosToken && memosToken.length < 32) throw new Error('MEMOS_BRIDGE_TOKEN 至少需要 32 个字符。');
 const memosQueue = memosQueueDir ? await SubmissionQueue.create(memosQueueDir, project) : undefined;
 const enabled = process.env.GITHUB_SYNC_ENABLED === 'true';
+const memosDeliveryEnabled = process.env.MEMOS_GITHUB_SYNC_ENABLED === 'true';
 const repository = process.env.GITHUB_REPOSITORY ?? '';
 const branch = process.env.GITHUB_BRANCH ?? 'main';
-if (enabled && (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) || !process.env.GITHUB_TOKEN)) throw new Error('请配置 GitHub 仓库与服务器端 token。');
+if (memosDeliveryEnabled && !memosQueue) throw new Error('启用 Memos GitHub 投递前必须配置 Memos 队列。');
+if ((enabled || memosDeliveryEnabled) && (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) || !process.env.GITHUB_TOKEN)) {
+  throw new Error('请配置 GitHub 仓库与服务器端 token。');
+}
 const ownerPath = path.join(store.root, 'owner.json');
 const binding = JSON.stringify({ repo: repository, branch });
 try {
@@ -63,13 +67,18 @@ await mkdir(settingsDir, { recursive: true });
 await writeFile(path.join(settingsDir, 'core-plugins.json'), JSON.stringify(['file-explorer', 'global-search', 'switcher', 'backlink', 'outgoing-link', 'tag-pane', 'page-preview', 'command-palette', 'editor-status', 'word-count']));
 await writeFile(path.join(settingsDir, 'community-plugins.json'), '[]');
 const [owner, repo] = repository.split('/');
-const worker = enabled ? new DeliveryWorker(store, new GitHubRemote({ owner, repo, branch, token: process.env.GITHUB_TOKEN! })) : undefined;
+const remote = enabled || memosDeliveryEnabled ? new GitHubRemote({ owner, repo, branch, token: process.env.GITHUB_TOKEN! }) : undefined;
+const worker = enabled ? new DeliveryWorker(store, remote!) : undefined;
 const config: AppConfig = { vault, syncEnabled: enabled, origin, project,
   memos: memosQueue ? { queue: memosQueue, token: memosToken! } : undefined };
 let running: Promise<void> | undefined;
 const tick = () => {
   if (running) return;
-  running = (async () => { await worker?.tick(); await vault.clean(); })()
+  running = (async () => {
+    await worker?.tick();
+    if (memosQueue && remote) await memosQueue.deliver(remote, { enabled: memosDeliveryEnabled });
+    await vault.clean();
+  })()
     .catch(() => console.error('投递或清理失败；未确认正文继续保留。')).finally(() => { running = undefined; });
 };
 const interval = setInterval(tick, 10000);
@@ -80,5 +89,6 @@ Object.assign(globalThis, { __ignisCapture: {
   verifyClient: ({ req, origin: wsOrigin }: { req: IncomingMessage; origin: string }) => authorized(req, config) && wsOrigin === origin,
   stop: async () => { clearInterval(interval); await running; await worker?.waitForIdle(); await memosQueue?.close(); await lock.close(); await unlink(path.join(store.root, 'instance.lock')); }
 } });
-console.info('Ignis 原版输入入口：' + origin + '；GitHub 投递' + (enabled ? '已启用' : '未启用'));
+console.info('Ignis 原版输入入口：' + origin + '；Echo GitHub 投递' + (enabled ? '已启用' : '未启用') +
+  '；Memos GitHub 投递' + (memosDeliveryEnabled ? '已启用' : '未启用'));
 createRequire(import.meta.url)(path.join(project, 'upstream/ignis/apps/ignis-server/server/index.js'));

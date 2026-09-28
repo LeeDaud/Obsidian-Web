@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { GitHubRemote } from '../../src/server/github';
-import { bundleFile, bytesHash, type BundleAttempt, type BundleDelivery } from '../../src/server/memos/bundle';
+import { bundleFile, bytesHash, type BundleAttempt, type BundleDelivery, validateBundle } from '../../src/server/memos/bundle';
 import { FakeGitHub } from '../fakes';
 
-const filename = 'Memos/20260928-120000.md';
+const filename = '00_Inbox/20260928-120000.md';
 function fixture() {
   const fake = new FakeGitHub();
   const image = Buffer.from([0, 255, 128, 13, 10, 0, 37]);
@@ -16,6 +16,14 @@ function fixture() {
   return { fake, remote, delivery, attachment, image, checkpoint };
 }
 describe('Memos multi-file GitHub delivery', () => {
+  it('accepts a legacy Memos record without rewriting its persisted identity', () => {
+    const delivery: BundleDelivery = {
+      submissionId: 'legacy-prefix', revision: 1,
+      files: [bundleFile('Memos/20260928-173655.md', Buffer.from('legacy'))],
+    };
+    validateBundle(delivery);
+    expect(delivery.files[0].path).toBe('Memos/20260928-173655.md');
+  });
   it('commits Chinese text and exact binary bytes together after durable checkpoint', async () => {
     const f = fixture();
     const result = await f.remote.publishBundle(f.delivery, async attempt => {
@@ -72,7 +80,7 @@ describe('Memos multi-file GitHub delivery', () => {
   it('rejects traversal, ambiguous paths, oversized text and altered snapshots before network I/O', async () => {
     const f = fixture(); let calls = 0;
     const remote = new GitHubRemote({ owner: 'test', repo: 'inbox', branch: 'main', token: 'synthetic' }, async () => { calls++; throw new Error(); });
-    for (const path of ['../private.md', 'Memos/../private.md', '/Memos/20260928-120000.md', 'Memos\\20260928-120000.md']) {
+    for (const path of ['../private.md', 'Memos/../private.md', '/00_Inbox/20260928-120000.md', 'Memos\\00_Inbox/20260928-120000.md']) {
       const files = [bundleFile(path, Buffer.from('x'))];
       await expect(remote.publishBundle({ ...f.delivery, files }, f.checkpoint)).rejects.toMatchObject({ code: 'INVALID_BUNDLE' });
     }

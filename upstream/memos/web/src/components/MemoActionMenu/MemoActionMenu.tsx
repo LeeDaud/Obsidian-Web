@@ -4,6 +4,7 @@ import {
   BookmarkMinusIcon,
   BookmarkPlusIcon,
   CheckCheckIcon,
+  CloudUploadIcon,
   CopyIcon,
   Edit3Icon,
   FileTextIcon,
@@ -16,6 +17,7 @@ import {
   TrashIcon,
 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "react-hot-toast";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +30,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useEchoBridgeStatus, useSubmitMemoToEcho } from "@/hooks/useEchoBridge";
 import { State } from "@/types/proto/api/v1/common_pb";
 import { useTranslate } from "@/utils/i18n";
 import { useMemoActionHandlers } from "./hooks";
@@ -41,6 +44,8 @@ const MemoActionMenu = (props: MemoActionMenuProps) => {
   // Dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const { data: echoBridge } = useEchoBridgeStatus();
+  const submitToEcho = useSubmitMemoToEcho();
 
   // Derived state
   const isComment = Boolean(memo.parent);
@@ -86,6 +91,20 @@ const MemoActionMenu = (props: MemoActionMenuProps) => {
               <Edit3Icon />
               {t("common.edit")}
             </DropdownMenuItem>
+            {echoBridge?.enabled && !isComment && (
+              <DropdownMenuItem
+                disabled={submitToEcho.isPending}
+                onClick={() => {
+                  submitToEcho.mutate(memo.name, {
+                    onSuccess: () => toast.success("已进入 Obsidian 投递队列"),
+                    onError: (error) => toast.error(error.message),
+                  });
+                }}
+              >
+                <CloudUploadIcon />
+                {submitToEcho.isPending ? "正在投递…" : "投递到 Obsidian"}
+              </DropdownMenuItem>
+            )}
           </>
         )}
 

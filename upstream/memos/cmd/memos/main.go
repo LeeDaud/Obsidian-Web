@@ -63,6 +63,8 @@ func init() {
 	rootCmd.Flags().String("driver", "sqlite", "database driver (sqlite, mysql, postgres, d1)")
 	rootCmd.Flags().String("dsn", "", "database source name (DSN)")
 	rootCmd.Flags().String("instance-url", "", "canonical external URL of the Memos instance")
+	rootCmd.Flags().String("echo-bridge-url", "", "internal Echo service origin")
+	rootCmd.Flags().String("echo-bridge-token", "", "server credential for Echo submissions")
 	rootCmd.Flags().Bool("allow-private-webhooks", false, "allow webhooks to access any private/reserved IP address")
 	rootCmd.Flags().StringSlice("webhook-private-network-allowlist", nil, "private webhook destinations to allow (exact hostname, IP, or CIDR)")
 	rootCmd.Flags().String("log-level", "info", "log verbosity level (debug, info, warn, error)")
@@ -81,6 +83,8 @@ func init() {
 		"driver",
 		"dsn",
 		"instance-url",
+		"echo-bridge-url",
+		"echo-bridge-token",
 		"allow-private-webhooks",
 		"webhook-private-network-allowlist",
 		"log-level",
@@ -109,18 +113,21 @@ func init() {
 
 func runServer() error {
 	instanceProfile := &profile.Profile{
-		Demo:           viper.GetBool("demo"),
-		Addr:           viper.GetString("addr"),
-		Port:           viper.GetInt("port"),
-		UNIXSock:       viper.GetString("unix-sock"),
-		Data:           viper.GetString("data"),
-		Driver:         viper.GetString("driver"),
-		DSN:            viper.GetString("dsn"),
-		InstanceURL:    viper.GetString("instance-url"),
-		RateLimit:      viper.GetBool("rate-limit"),
-		TrustedProxies: viper.GetStringSlice("trusted-proxies"),
-		Version:        version.GetCurrentVersion(),
-		Commit:         version.Commit,
+		Demo:            viper.GetBool("demo"),
+		Addr:            viper.GetString("addr"),
+		Port:            viper.GetInt("port"),
+		UNIXSock:        viper.GetString("unix-sock"),
+		Data:            viper.GetString("data"),
+		Driver:          viper.GetString("driver"),
+		DSN:             viper.GetString("dsn"),
+		InstanceURL:     viper.GetString("instance-url"),
+		EchoBridgeURL:   viper.GetString("echo-bridge-url"),
+		EchoBridgeHost:  viper.GetString("echo-bridge-host"),
+		EchoBridgeToken: viper.GetString("echo-bridge-token"),
+		RateLimit:       viper.GetBool("rate-limit"),
+		TrustedProxies:  viper.GetStringSlice("trusted-proxies"),
+		Version:         version.GetCurrentVersion(),
+		Commit:          version.Commit,
 	}
 
 	allowPrivateWebhooks := viper.GetBool("allow-private-webhooks")

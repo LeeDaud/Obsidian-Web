@@ -20,7 +20,7 @@ const sameDraft = (left: EditorDraft, right: EditorDraft): boolean =>
  * state as props, so the component that mounts this hook does not re-render on
  * every keystroke.
  */
-export const useAutoSave = (username: string, cacheKey: string | undefined, enabled = true) => {
+export const useAutoSave = (username: string, cacheKey: string | undefined, enabled = true, baseRevision?: string) => {
   const store = useEditorStore();
   const initialState = store.getState();
   const latestDraftRef = useRef<EditorDraft>({
@@ -39,7 +39,7 @@ export const useAutoSave = (username: string, cacheKey: string | undefined, enab
       if (discardedDraftRef.current !== undefined && !sameDraft(discardedDraftRef.current, draft)) {
         discardedDraftRef.current = undefined;
       }
-      cacheService.save(key, draft.content, draft.attachments, draft.location);
+      cacheService.save(key, draft.content, draft.attachments, draft.location, baseRevision);
     };
 
     // Persist the current draft on mount/enable, then on every relevant change.
@@ -56,7 +56,7 @@ export const useAutoSave = (username: string, cacheKey: string | undefined, enab
         persist(draft);
       }
     });
-  }, [store, username, cacheKey, enabled]);
+  }, [store, username, cacheKey, enabled, baseRevision]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -67,7 +67,13 @@ export const useAutoSave = (username: string, cacheKey: string | undefined, enab
         return;
       }
 
-      cacheService.saveNow(key, latestDraftRef.current.content, latestDraftRef.current.attachments, latestDraftRef.current.location);
+      cacheService.saveNow(
+        key,
+        latestDraftRef.current.content,
+        latestDraftRef.current.attachments,
+        latestDraftRef.current.location,
+        baseRevision,
+      );
     };
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
@@ -85,7 +91,13 @@ export const useAutoSave = (username: string, cacheKey: string | undefined, enab
       window.removeEventListener("pagehide", flushDraft);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [store, username, cacheKey, enabled]);
+  }, [store, username, cacheKey, enabled, baseRevision]);
+
+  const saveDraft = useCallback(() => {
+    const key = cacheService.key(username, cacheKey);
+    const draft = latestDraftRef.current;
+    cacheService.saveNow(key, draft.content, draft.attachments, draft.location, baseRevision);
+  }, [username, cacheKey, baseRevision]);
 
   const discardDraft = useCallback(() => {
     const key = cacheService.key(username, cacheKey);
@@ -93,5 +105,5 @@ export const useAutoSave = (username: string, cacheKey: string | undefined, enab
     cacheService.clear(key);
   }, [username, cacheKey]);
 
-  return { discardDraft };
+  return { discardDraft, saveDraft };
 };

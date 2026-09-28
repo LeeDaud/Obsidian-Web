@@ -34,6 +34,20 @@ function fingerprint(input: Submission): string {
   return digest(JSON.stringify([sourceKey(input), input.delivery.revision,
     input.delivery.files.map(f => [f.path, f.sha256]).sort((a, b) => a[0].localeCompare(b[0]))]));
 }
+const isMarkdownPath = (value: string) => /^(?:00_Inbox|Memos)\/\d{8}-\d{6}\.md$/.test(value);
+const normalizeMarkdownPath = (value: string) => {
+  const legacy = /^(?:Memos\/)?(\d{8}-\d{6}\.md)$/.exec(value);
+  return legacy ? `00_Inbox/${legacy[1]}` : value;
+};
+function markdownPath(input: Submission): string { return input.delivery.files.find(file => isMarkdownPath(file.path))!.path; }
+function nextMarkdownPath(value: string): string {
+  const match = /^00_Inbox\/(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})\.md$/.exec(value);
+  if (!match) throw new AppError(400, 'INVALID_BUNDLE', '正文路径格式无效。');
+  const [year, month, day, hour, minute, second] = match.slice(1).map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second + 1));
+  const stamp = date.toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+  return `00_Inbox/${stamp}.md`;
+}
 function isInside(parent: string, candidate: string): boolean {
   const relative = path.relative(parent, candidate);
   return !relative || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative));
@@ -93,17 +107,21 @@ export class SubmissionQueue {
     }
   }
   async enqueue(input: Submission): Promise<SubmissionRecord> {
-    identity(input);
-    if (input.delivery.attempt || input.delivery.files.some(file => file.expectedBlob !== undefined)) {
+    // Accept the bridge's earlier candidate prefix during a rolling upgrade,
+    // but persist and publish every new Markdown file in 00_Inbox.
+    const snapshot = structuredClone(input);
+    snapshot.delivery.files = snapshot.delivery.files.map(file => ({ ...file, path: normalizeMarkdownPath(file.path) }));
+    identity(snapshot);
+    if (snapshot.delivery.attempt || snapshot.delivery.files.some(file => file.expectedBlob !== undefined)) {
       throw new AppError(400, 'INVALID_SUBMISSION', '提交不能指定远端核验状态。');
     }
-    // Snapshot before entering the mutex so a caller cannot mutate its request.
-    const snapshot = structuredClone(input);
     return this.mutex.run(async () => {
       const all = await this.records();
       const existing = all.find(record => recordId(record) === recordId(snapshot));
-      const hash = fingerprint(snapshot);
       if (existing) {
+        const allocated = markdownPath(existing);
+        snapshot.delivery.files = snapshot.delivery.files.map(file => isMarkdownPath(file.path) ? { ...file, path: allocated } : file);
+        const hash = fingerprint(snapshot);
         if (existing.fingerprint !== hash) throw new AppError(409, 'IDEMPOTENCY_CONFLICT', '提交标识已用于其他内容。');
         return existing;
       }
@@ -111,11 +129,16 @@ export class SubmissionQueue {
       if (prior.some(record => record.delivery.revision >= snapshot.delivery.revision)) {
         throw new AppError(409, 'VERSION_CONFLICT', '源版本必须递增，旧草稿需要另存。');
       }
-      const markdown = snapshot.delivery.files.find(file => file.path.startsWith('Memos/'))!.path;
-      if (prior.some(record => record.delivery.files.find(file => file.path.startsWith('Memos/'))!.path !== markdown) ||
-          all.some(record => sourceKey(record) !== sourceKey(snapshot) && record.delivery.files.some(file => file.path === markdown))) {
-        throw new AppError(409, 'PATH_CONFLICT', '笔记路径已分配，请重新分配时间戳。');
+      const priorPath = prior[0] && markdownPath(prior[0]);
+      if (priorPath) {
+        if (prior.some(record => markdownPath(record) !== priorPath)) throw new AppError(409, 'PATH_CONFLICT', '笔记路径记录不一致。');
+        snapshot.delivery.files = snapshot.delivery.files.map(file => isMarkdownPath(file.path) ? { ...file, path: priorPath } : file);
+      } else {
+        let allocated = markdownPath(snapshot);
+        while (all.some(record => record.delivery.files.some(file => file.path === allocated))) allocated = nextMarkdownPath(allocated);
+        snapshot.delivery.files = snapshot.delivery.files.map(file => isMarkdownPath(file.path) ? { ...file, path: allocated } : file);
       }
+      const hash = fingerprint(snapshot);
       const record: SubmissionRecord = { ...snapshot, format: 1, fingerprint: hash, state: 'pending', failures: 0, retryAt: 0 };
       await this.write(record); return structuredClone(record);
     });

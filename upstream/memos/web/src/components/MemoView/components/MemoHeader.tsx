@@ -1,7 +1,6 @@
 import { BookmarkIcon } from "lucide-react";
 import { useCallback } from "react";
 import { Link } from "react-router-dom";
-import RelativeTime from "@/components/RelativeTime";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { FOCUS_VISIBLE_OUTLINE_CLASSES } from "@/components/ui/focus";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -27,11 +26,11 @@ import MemoSpaceBadge from "./MemoSpaceBadge";
 /** The card's trailing actions are the kit's quiet 24px squares, whether or not they are kit buttons. */
 const MEMO_HEADER_ACTION_CLASSES = cn(buttonVariants({ variant: "quiet", size: "icon-sm" }));
 
-const MemoHeader: React.FC<MemoHeaderProps> = ({ timeDisplay = "relative", showCreator, showVisibility, showPinned, showSpace }) => {
+const MemoHeader: React.FC<MemoHeaderProps> = ({ showCreator, showVisibility, showPinned, showSpace }) => {
   const t = useTranslate();
 
   const { memo, creator, currentUser, parentPage, isArchived, readonly, openEditor } = useMemoViewContext();
-  const { createTime, updateTime, displayTime: memoDisplayTime, isDisplayingUpdatedTime, relativeTimeFormat } = useMemoViewDerived();
+  const { createTime, updateTime, displayTime: memoDisplayTime, isDisplayingUpdatedTime } = useMemoViewDerived();
   const { newMemoName } = useNewMemo();
   const visibilityOption = getVisibilityOption(memo.visibility);
 
@@ -42,13 +41,14 @@ const MemoHeader: React.FC<MemoHeaderProps> = ({ timeDisplay = "relative", showC
 
   const { unpinMemo } = useMemoActions(memo);
 
-  const timeValue = isArchived ? (
-    memoDisplayTime?.toLocaleString(i18n.language)
-  ) : timeDisplay === "time" ? (
-    memoDisplayTime?.toLocaleTimeString(i18n.language, { hour: "numeric", minute: "2-digit" })
-  ) : (
-    <RelativeTime date={memoDisplayTime} format={relativeTimeFormat} />
-  );
+  const timeValue = memoDisplayTime?.toLocaleString(i18n.language, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
   const displayTime = isDisplayingUpdatedTime ? (
     <>
       {t("common.last-updated-at")} {timeValue}

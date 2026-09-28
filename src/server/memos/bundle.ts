@@ -37,11 +37,13 @@ export function validateBundle(delivery: BundleDelivery): void {
   const paths = new Set<string>();
   let markdownCount = 0; let attachmentBytes = 0;
   for (const file of delivery.files) {
-    const markdown = /^Memos\/[0-9]{8}-[0-9]{6}\.md$/.test(file.path);
+    const markdown = /^(?:00_Inbox|Memos)\/[0-9]{8}-[0-9]{6}\.md$/.test(file.path);
     const attachment = /^attachments\/memos\/[a-zA-Z0-9-]{1,80}\/[0-9a-f]{64}\.[a-z0-9]{1,10}$/.test(file.path);
-    if ((!markdown && !attachment) || paths.has(file.path.toLowerCase()) || typeof file.base64 !== 'string' ||
-        (file.expectedBlob !== undefined && !/^[0-9a-f]{40,64}$/.test(file.expectedBlob))) {
-      throw new AppError(400, 'INVALID_BUNDLE', '投递路径或预期版本无效。');
+    if (!markdown && !attachment) throw new AppError(400, 'INVALID_BUNDLE', `投递路径无效：${file.path}`);
+    if (paths.has(file.path.toLowerCase())) throw new AppError(400, 'INVALID_BUNDLE', `投递路径重复：${file.path}`);
+    if (typeof file.base64 !== 'string') throw new AppError(400, 'INVALID_BUNDLE', `投递编码无效：${file.path}`);
+    if (file.expectedBlob !== undefined && !/^[0-9a-f]{40,64}$/.test(file.expectedBlob)) {
+      throw new AppError(400, 'INVALID_BUNDLE', `预期版本无效：${file.path}`);
     }
     paths.add(file.path.toLowerCase());
     // Bound encoded data before allocating its decoded buffer.

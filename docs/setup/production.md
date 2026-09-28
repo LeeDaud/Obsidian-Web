@@ -71,6 +71,21 @@ docker start echo-capture
 
 部署使用 deploy/Dockerfile、compose.yaml、entrypoint.sh、vps.py；线上浏览器检查使用 deploy/verify.mjs。未添加 CI/CD，也未提交或推送网页源码。
 
+## 2026-09-28 Memos 域名与接口
+
+- 新发布目录为 `/opt/echo/releases/20260928`；镜像为 `echo-capture:20260928` 与 `echo-memos:20260928`，容器均为 healthy。
+- `https://memos.leedaud.xyz` 由现有 Caddy 转发至同一 Docker 网络内的 `echo-memos:5230`，不发布宿主机应用端口；HTTP 返回 308 并跳转 HTTPS，HTTPS 首页返回 200。
+- Memos 数据位于 `/opt/memos/data`；Echo 接收队列位于 `/opt/memos/echo-queue`。二者均不保存 Git 仓库。
+- Bridge token 生成后拆成两份 `0400` 文件，分别归属 Echo UID 1000 与 Memos UID 10001；凭据未写入源码、镜像、日志或聊天。
+- 首个管理员已在公网开放前创建，公开注册关闭，实例访问模式为 private。随机初始凭据仅保存在服务器 root 可读的 `/opt/memos/secrets/initial_admin`。
+- `/api/echo/v1/status` 返回 `{"enabled":true}`；同源但未登录的提交请求返回 401。Memos 后端持服务凭据转发至 Echo 内部接口，浏览器不接触 bridge token。
+- 上线后 `echo.leedaud.xyz` 与 `bitwarden.leedaud.xyz` 均返回 200；Caddy 与 Vaultwarden 未重建。
+- Memos 队列到 GitHub 的生产 worker 已于同日后续启用，与 Echo worker 在同一串行 tick 中使用同一 GitHub remote，避免并发更新分支。
+- 合成 Memo `memos/An746PkDDqZEevQGrFm3um` 经正式鉴权入口投递为 `Memos/20260928-173655.md`；队列状态 `verified`，GitHub commit `9779cede3e3eb49af1f697f630b9a852607e296e`，按该 commit 读取的正文和唯一标识均匹配。
+- 本轮未删除合成 Memo、GitHub 文件或服务器已核验队列记录。附件、前端持久状态与活动会话保护后的条件清理仍待实现。
+- 后续版本已启用保存后自动投递、设备暂存、双击编辑与图片附件快照。新正文写入 `00_Inbox/yyyyMMdd-HHmmss.md`；历史 `Memos/` 文件和队列记录保持原位。
+- 图片合成验收 Memo `memos/3sYx8n8tpXbYhPUzypKWNH` 已自动投递为 `00_Inbox/20260928-231707.md`，commit `e5e9c240e4cbec90a6cf01b19fc6ce65380110e7`；Markdown 引用与附件二进制均按该 commit 核验一致。
+
 ## 2026-09-21 手动上传版本
 
 - 已部署镜像 `sha256:7797f53f1bbdb5c31830dc8f78593d8afa44c76fa14dd937d2ca0925dbdb85a9`；`echo-capture`、Caddy 与 Vaultwarden 均健康，两个公网入口返回 200。

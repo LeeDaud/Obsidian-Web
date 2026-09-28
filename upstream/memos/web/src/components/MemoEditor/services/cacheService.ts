@@ -9,24 +9,33 @@ export const CACHE_DEBOUNCE_DELAY = 500;
 const pendingSaves = new Map<string, number>();
 const cursors = new Map<string, number>();
 const STRUCTURED_CACHE_ENTRY_KIND = "memos.editor-cache";
-const STRUCTURED_CACHE_ENTRY_VERSION = 3;
+const STRUCTURED_CACHE_ENTRY_VERSION = 4;
 
 export interface EditorDraft {
   content: string;
   attachments: Attachment[];
   /** Undefined for legacy drafts; null explicitly remembers a removed location. */
   location?: Location | null;
+  /** Server update_time observed when an existing memo draft was opened. */
+  baseRevision?: string;
 }
 
 function deserializeDraft(raw: string): EditorDraft {
   try {
-    const parsed = JSON.parse(raw) as { kind?: unknown; version?: unknown; content?: unknown; attachments?: unknown; location?: unknown };
+    const parsed = JSON.parse(raw) as {
+      kind?: unknown;
+      version?: unknown;
+      content?: unknown;
+      attachments?: unknown;
+      location?: unknown;
+      baseRevision?: unknown;
+    };
     if (parsed.kind === STRUCTURED_CACHE_ENTRY_KIND && parsed.version === 1 && typeof parsed.content === "string") {
       return { content: parsed.content, attachments: [] };
     }
     if (
       parsed.kind === STRUCTURED_CACHE_ENTRY_KIND &&
-      (parsed.version === 2 || parsed.version === STRUCTURED_CACHE_ENTRY_VERSION) &&
+      (parsed.version === 2 || parsed.version === 3 || parsed.version === STRUCTURED_CACHE_ENTRY_VERSION) &&
       typeof parsed.content === "string"
     ) {
       const attachments = Array.isArray(parsed.attachments)
@@ -39,7 +48,7 @@ function deserializeDraft(raw: string): EditorDraft {
           })
         : [];
       let location: Location | null | undefined;
-      if (parsed.version === STRUCTURED_CACHE_ENTRY_VERSION) {
+      if (parsed.version === 3 || parsed.version === STRUCTURED_CACHE_ENTRY_VERSION) {
         location = null;
         if (parsed.location) {
           try {
@@ -49,7 +58,14 @@ function deserializeDraft(raw: string): EditorDraft {
           }
         }
       }
-      return { content: parsed.content, attachments, ...(location !== undefined ? { location } : {}) };
+      const baseRevision =
+        parsed.version === STRUCTURED_CACHE_ENTRY_VERSION && typeof parsed.baseRevision === "string" ? parsed.baseRevision : undefined;
+      return {
+        content: parsed.content,
+        attachments,
+        ...(location !== undefined ? { location } : {}),
+        ...(baseRevision ? { baseRevision } : {}),
+      };
     }
   } catch {
     // Drafts have historically been stored as raw markdown strings.
@@ -58,19 +74,20 @@ function deserializeDraft(raw: string): EditorDraft {
   return { content: raw, attachments: [] };
 }
 
-function serializeDraft(content: string, attachments: Attachment[], location: Location | null): string {
+function serializeDraft(content: string, attachments: Attachment[], location: Location | null, baseRevision?: string): string {
   return JSON.stringify({
     kind: STRUCTURED_CACHE_ENTRY_KIND,
     version: STRUCTURED_CACHE_ENTRY_VERSION,
     location: location ? toJson(LocationSchema, location) : null,
     content,
     attachments: attachments.map((attachment) => toJson(AttachmentSchema, attachment)),
+    baseRevision,
   });
 }
 
-function writeEntry(key: string, content: string, attachments: Attachment[], location: Location | null): void {
+function writeEntry(key: string, content: string, attachments: Attachment[], location: Location | null, baseRevision?: string): void {
   if (content.trim() || attachments.length > 0) {
-    localStorage.setItem(key, serializeDraft(content, attachments, location));
+    localStorage.setItem(key, serializeDraft(content, attachments, location, baseRevision));
   } else {
     localStorage.removeItem(key);
   }
@@ -81,7 +98,7 @@ export const cacheService = {
     return `${username}-${cacheKey || ""}`;
   },
 
-  save: (key: string, content: string, attachments: Attachment[] = [], location: Location | null = null) => {
+  save: (key: string, content: string, attachments: Attachment[] = [], location: Location | null = null, baseRevision?: string) => {
     const pendingSave = pendingSaves.get(key);
     if (pendingSave) {
       window.clearTimeout(pendingSave);
@@ -90,20 +107,20 @@ export const cacheService = {
     const timeoutId = window.setTimeout(() => {
       pendingSaves.delete(key);
 
-      writeEntry(key, content, attachments, location);
+      writeEntry(key, content, attachments, location, baseRevision);
     }, CACHE_DEBOUNCE_DELAY);
 
     pendingSaves.set(key, timeoutId);
   },
 
-  saveNow: (key: string, content: string, attachments: Attachment[] = [], location: Location | null = null) => {
+  saveNow: (key: string, content: string, attachments: Attachment[] = [], location: Location | null = null, baseRevision?: string) => {
     const pendingSave = pendingSaves.get(key);
     if (pendingSave) {
       window.clearTimeout(pendingSave);
       pendingSaves.delete(key);
     }
 
-    writeEntry(key, content, attachments, location);
+    writeEntry(key, content, attachments, location, baseRevision);
   },
 
   load(key: string): string {

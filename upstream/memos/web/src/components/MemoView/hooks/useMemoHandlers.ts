@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import { useInstance } from "@/contexts/InstanceContext";
 import type { PreviewMediaItem } from "@/utils/media-item";
 
 interface UseMemoHandlersOptions {
@@ -10,8 +9,6 @@ interface UseMemoHandlersOptions {
 
 export const useMemoHandlers = (options: UseMemoHandlersOptions) => {
   const { readonly, openEditor, openPreview } = options;
-  const { memoRelatedSetting } = useInstance();
-
   const handleMemoContentClick = useCallback(
     (e: React.MouseEvent) => {
       const targetEl = e.target as HTMLElement;
@@ -28,12 +25,12 @@ export const useMemoHandlers = (options: UseMemoHandlersOptions) => {
   const handleMemoContentDoubleClick = useCallback(
     (e: React.MouseEvent) => {
       if (readonly) return;
-      if (memoRelatedSetting.enableDoubleClickEdit) {
-        e.preventDefault();
-        openEditor();
-      }
+      const target = e.target as HTMLElement;
+      if (target.closest("a, button, img, input, textarea, select, code, pre, [role='checkbox'], [contenteditable='true']")) return;
+      e.preventDefault();
+      openEditor();
     },
-    [readonly, openEditor, memoRelatedSetting.enableDoubleClickEdit],
+    [readonly, openEditor],
   );
 
   return { handleMemoContentClick, handleMemoContentDoubleClick };

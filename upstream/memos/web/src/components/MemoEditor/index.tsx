@@ -103,14 +103,18 @@ const MemoEditorImpl: React.FC<MemoEditorProps> = ({
     defaultCreateTime,
     defaultLocation,
   });
-  const isDraftCacheEnabled = !memo;
+  const draftBaseRevision = memo?.updateTime ? `${memo.updateTime.seconds}:${memo.updateTime.nanos}` : undefined;
 
   useEffect(() => {
     onSavingChange?.(isSaving);
   }, [isSaving, onSavingChange]);
 
   // Auto-save content to localStorage (subscribes to the store internally).
-  const { discardDraft } = useAutoSave(currentUser?.name ?? "", cacheKey, isInitialized && isDraftCacheEnabled);
+  const { discardDraft, saveDraft } = useAutoSave(currentUser?.name ?? "", cacheKey, isInitialized, draftBaseRevision);
+  const handleDraft = useCallback(() => {
+    saveDraft();
+    toast.success("已暂存到当前设备");
+  }, [saveDraft]);
 
   const { containerRef: editorContainerRef, placeholderHeight } = useFocusMode(isFocusMode);
 
@@ -390,6 +394,7 @@ const MemoEditorImpl: React.FC<MemoEditorProps> = ({
           />
           <EditorToolbar
             onSave={handleSave}
+            onDraft={handleDraft}
             onCancel={onCancel ? handleCancel : undefined}
             memoName={memoName}
             parentMemoName={parentMemoName}

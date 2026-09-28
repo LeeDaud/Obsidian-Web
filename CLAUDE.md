@@ -3,6 +3,7 @@
 ## Memos 接入授权（2026-09-28）
 - 用户已确认 docs/plan/plan.md 中 Memos 临时收件箱方案，授权本地实现与合成数据验证，保留原 Echo/Ignis 入口。
 - Memos 使用原生手机网页和显式投递按钮；编辑只存设备草稿，原生手动保存仅暂存，投递按钮才授权 GitHub 投递。采用原生登录与私有访问，不改变 Echo 现有免登录策略。
+- Memos 文本 bridge 已在固定上游中实现：仅配置服务端 Echo bridge 后显示投递菜单，由 Memos 登录身份核验 memo 所有权，浏览器不接触 bridge 凭据；附件、状态持久化及清理仍未启用。
 - 清理须核验正文及全部附件、原子比较源版本并保护活动/不确定编辑会话；心跳失联不是安全结束。新服务真实投递和清理默认关闭。
 - 新服务部署、凭据、数据库迁移及真实内容删除按专项授权执行；实现状态以 todo 和验证记录为准。
 
@@ -62,5 +63,9 @@
 - deploy/ 存放无凭据部署代码；临时打包产物在系统临时目录，凭据在项目外本地应用数据目录和服务器 secrets。
 - HTTPS、匿名拒绝、真实原版编辑器、WebSocket、健康检查、排他锁和进程崩溃恢复验证通过；详情 docs/setup/production.md。
 - 用户已确认完成电脑 Obsidian Git 配置。专用 token 已安装，真实 GitHub 投递已启用；`20260921224346.md` 已完成网页入口、服务器、GitHub 与 `D:/AAA-Echo` 的内容标识核验。
+
+## Memos 正式入口（2026-09-28）
+- 用户已授权并完成 `memos.leedaud.xyz` 部署；Caddy HTTPS 转发至独立 `echo-memos` 容器，实例为 private 且关闭公开注册，Echo、Caddy 与 Vaultwarden 验收正常。
+- Memos bridge token 只以按容器 UID 隔离的服务器 `0400` 文件提供；Memos 文本提交接口及独立 GitHub worker 已启用。合成 Memo 已真实写入 `LeeDaud/Echo` 并按提交核验 Markdown 内容；附件、状态回显和条件清理仍未启用。
 
 

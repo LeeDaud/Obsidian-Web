@@ -36,8 +36,15 @@ export const useMemoInit = ({
 
     if (memo) {
       const initialState = memoService.fromMemo(memo);
-      cacheService.clear(key);
       dispatch(actions.initMemo(initialState));
+      const cachedDraft = cacheService.loadDraft(key);
+      const revision = memo.updateTime ? `${memo.updateTime.seconds}:${memo.updateTime.nanos}` : "";
+      if (cachedDraft.baseRevision === revision && cachedDraft.content) {
+        dispatch(actions.setContent(cachedDraft.content));
+        dispatch(actions.setMetadata({ attachments: cachedDraft.attachments, location: cachedDraft.location ?? undefined }));
+      } else {
+        cacheService.clear(key);
+      }
     } else {
       const cachedDraft = cacheService.loadDraft(key);
       if (cachedDraft.content) {

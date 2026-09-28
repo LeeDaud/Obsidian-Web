@@ -33,7 +33,7 @@ async function setup() {
 
 function submission() {
   return { instance: 'local', owner: 'users/1', memo: 'memos/1', delivery: { submissionId: 'submit-1', revision: 1,
-    files: [bundleFile('Memos/20260928-153900.md', Buffer.from('中文快照'))] } };
+    files: [bundleFile('20260928-153900.md', Buffer.from('中文快照'))] } };
 }
 
 it('requires the internal service credential and never returns note content', async () => {

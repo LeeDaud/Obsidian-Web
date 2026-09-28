@@ -80,10 +80,15 @@ func NewServer(ctx context.Context, profile *profile.Profile, store *store.Store
 		return c.String(http.StatusOK, "Service ready.")
 	})
 
+	echoBridge := newEchoBridgeService(profile, store, s.Secret)
+	echoBridge.registerRoutes(echoServer)
+
 	// Serve frontend static files.
 	frontend.NewFrontendService(profile, store).Serve(ctx, echoServer)
 
 	apiV1Service := apiv1.NewAPIV1Service(s.Secret, profile, store)
+	echoBridge.attachmentBlob = apiV1Service.GetAttachmentBlob
+	apiV1Service.MemoSaved = echoBridge.submitSavedMemo
 	s.apiV1Service = apiV1Service
 
 	// Register HTTP file server routes BEFORE gRPC-Gateway to ensure proper range request handling for Safari.

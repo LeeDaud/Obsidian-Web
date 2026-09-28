@@ -71,6 +71,9 @@ type APIV1Service struct {
 	MarkdownService         markdown.Service
 	SSEHub                  *SSEHub
 	NotificationEmailSender notification.EmailSender
+	// MemoSaved is invoked after a memo transaction and its attachment links
+	// have committed. Delivery failures must not roll back the user's memo.
+	MemoSaved func(context.Context, int32, string) error
 
 	// RateLimiter bounds request rates; nil disables every limit.
 	RateLimiter ratelimit.Limiter

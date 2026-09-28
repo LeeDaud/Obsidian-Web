@@ -39,6 +39,12 @@ type Profile struct {
 	// TrustedProxies lists the proxies whose forwarding headers identify the
 	// client: CIDRs, addresses, or the keywords "private" and "none".
 	TrustedProxies []string
+	// EchoBridgeURL is the internal Echo service origin. Empty disables the integration.
+	EchoBridgeURL string
+	// EchoBridgeHost preserves Echo's public Host validation over an internal network hop.
+	EchoBridgeHost string
+	// EchoBridgeToken authenticates server-to-server snapshot submissions.
+	EchoBridgeToken string
 }
 
 func checkDataDir(dataDir string) (string, error) {
@@ -71,6 +77,20 @@ func (p *Profile) Validate() error {
 		return err
 	}
 	p.InstanceURL = instanceURL
+	bridgeURL, err := normalizeInstanceURL(p.EchoBridgeURL)
+	if err != nil {
+		return errors.Wrap(err, "invalid Echo bridge URL")
+	}
+	if (bridgeURL == "") != (p.EchoBridgeToken == "") {
+		return errors.New("Echo bridge URL and token must be configured together")
+	}
+	if p.EchoBridgeToken != "" && len(p.EchoBridgeToken) < 32 {
+		return errors.New("Echo bridge token must be at least 32 characters")
+	}
+	if bridgeURL != "" && p.InstanceURL == "" {
+		return errors.New("instance URL is required when Echo bridge is enabled")
+	}
+	p.EchoBridgeURL = bridgeURL
 
 	// Set default data directory if not specified
 	if p.Data == "" {

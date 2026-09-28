@@ -1,0 +1,28 @@
+FROM node:24.14-bookworm-slim AS web
+RUN corepack enable && corepack prepare pnpm@11.0.1 --activate
+WORKDIR /src/web
+COPY upstream/memos/web/package.json upstream/memos/web/pnpm-lock.yaml upstream/memos/web/pnpm-workspace.yaml ./
+COPY upstream/memos/web/patches ./patches
+RUN pnpm install --frozen-lockfile
+COPY upstream/memos/web/ ./
+RUN pnpm build
+
+FROM golang:1.27.0-bookworm AS backend
+WORKDIR /src
+COPY upstream/memos/go.mod upstream/memos/go.sum ./
+RUN go mod download
+COPY upstream/memos/ ./
+COPY --from=web /src/web/dist ./server/frontend/dist
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/memos ./cmd/memos
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --system --uid 10001 --home-dir /var/opt/memos memos \
+    && install -d -o memos -g memos -m 700 /var/opt/memos
+COPY --from=backend /out/memos /usr/local/bin/memos
+COPY deploy/memos-entrypoint.sh /usr/local/bin/memos-entrypoint
+RUN chmod 755 /usr/local/bin/memos-entrypoint
+USER memos
+EXPOSE 5230
+ENTRYPOINT ["/usr/local/bin/memos-entrypoint"]

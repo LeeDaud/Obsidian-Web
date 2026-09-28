@@ -4,6 +4,10 @@ if [ "${GITHUB_SYNC_ENABLED:-false}" = true ]; then
     GITHUB_TOKEN=$(cat /run/secrets/github_token)
     export GITHUB_TOKEN
 fi
+if [ -n "${MEMOS_QUEUE_DIR:-}" ]; then
+    MEMOS_BRIDGE_TOKEN=$(cat /run/secrets/memos_bridge_token_echo)
+    export MEMOS_BRIDGE_TOKEN
+fi
 # Dedicated bind-mounted flock survives no process exit. Only its holder can
 # recover the app's stale crash marker; another container cannot open this queue.
 exec flock --exclusive --nonblock --no-fork /locks/server.lock sh -c '
