@@ -12,7 +12,7 @@ import type { EditorToolbarProps } from "../types";
 import InsertMenu from "./InsertMenu";
 import VisibilitySelector from "./VisibilitySelector";
 
-const PRIMARY_ACTION_BUTTON_CLASSES = "min-h-11 min-w-24 gap-1.5";
+const ACTION_BUTTON_CLASSES = "min-h-11 min-w-24 gap-1.5";
 
 /**
  * Shortcut chip inside the commit button. While saving, a spinner takes the
@@ -79,12 +79,19 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   };
 
   const commitButton = justSaved ? (
-    <Button size="sm" className={PRIMARY_ACTION_BUTTON_CLASSES} disabled>
+    <Button variant="quiet" size="sm" className={ACTION_BUTTON_CLASSES} disabled>
       {t("editor.saved")}
       <CheckIcon className="size-3.5" strokeWidth={2.5} />
     </Button>
   ) : (
-    <Button size="sm" className={PRIMARY_ACTION_BUTTON_CLASSES} onClick={onSave} disabled={isSaving || !valid} aria-label={commitLabel}>
+    <Button
+      variant="quiet"
+      size="sm"
+      className={ACTION_BUTTON_CLASSES}
+      onClick={onSave}
+      disabled={isSaving || !valid}
+      aria-label={commitLabel}
+    >
       <SaveIcon className="size-4" />
       {commitLabel}
       <ShortcutChip busy={isSaving} />
@@ -109,7 +116,14 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
       </div>
 
       <div className="flex flex-row items-center justify-end gap-1">
-        <Button size="sm" className={PRIMARY_ACTION_BUTTON_CLASSES} onClick={onDraft} disabled={committing} aria-label="暂存到当前设备">
+        <Button
+          variant="quiet"
+          size="sm"
+          className={ACTION_BUTTON_CLASSES}
+          onClick={onDraft}
+          disabled={committing}
+          aria-label="暂存到当前设备"
+        >
           <ArchiveIcon className="size-4" />
           暂存
         </Button>
