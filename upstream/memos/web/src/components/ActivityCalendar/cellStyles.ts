@@ -19,17 +19,17 @@ const EMPTY_CHIP = "bg-transparent text-foreground/75 group-hover/day:bg-muted/4
 /** A picked day is a checked filter like a view or tag row: it takes the accent, not a ring. */
 const SELECTED_CHIP = "z-10 bg-primary font-medium text-primary-foreground";
 
-/** Primary-tinted activity levels; the small chip can carry a stronger wash than a full day cell. */
+/** Codex-style neutral density: ink washes in light mode, white washes in dark mode. */
 const INTENSITY_TINTS: Record<Exclude<ActivityLevel, 0>, string> = {
-  1: "bg-primary/12 text-foreground/75",
-  2: "bg-primary/22 text-foreground/80",
-  3: "bg-primary/34 text-foreground/80",
-  4: "bg-primary/48 text-foreground/85",
+  1: "bg-foreground/[0.06] text-foreground/75",
+  2: "bg-foreground/[0.12] text-foreground/80",
+  3: "bg-foreground/[0.2] text-foreground/90",
+  4: "bg-foreground/[0.3] text-foreground",
 };
 
 /**
- * The same ladder for a full calendar day cell, with its hover step: lighter than the chip
- * because excerpts and photos sit on top. Kept beside the chip's so the two cannot drift.
+ * Full calendar day cells use the same monochrome primary token at lower opacity because
+ * excerpts and photos sit on top.
  */
 export const DAY_CELL_FILLS: Record<ActivityLevel, string> = {
   0: "bg-card hover:bg-muted/40",

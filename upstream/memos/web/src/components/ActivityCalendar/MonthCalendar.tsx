@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { useInstance } from "@/contexts/InstanceContext";
 import { getToday } from "@/lib/calendar-utils";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,40 @@ import { calculateMaxCount, getTooltipText } from "./utils";
 
 /** The type of a weekday column label, shared by every month grid. */
 export const WEEKDAY_LABEL_CLASSES = "text-2xs font-medium uppercase tracking-[0.04em] text-muted-foreground/50";
+
+/** Keep the compact calendar accurate when the app remains open across local midnight. */
+const useCalendarToday = (): string => {
+  const [today, setToday] = useState(getToday);
+
+  useEffect(() => {
+    let timer: number;
+
+    const scheduleNextDay = () => {
+      window.clearTimeout(timer);
+      const nextDay = new Date();
+      nextDay.setHours(24, 0, 0, 50);
+      timer = window.setTimeout(() => {
+        setToday(getToday());
+        scheduleNextDay();
+      }, nextDay.getTime() - Date.now());
+    };
+    const refreshToday = () => {
+      setToday(getToday());
+      scheduleNextDay();
+    };
+
+    scheduleNextDay();
+    window.addEventListener("focus", refreshToday);
+    document.addEventListener("visibilitychange", refreshToday);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("focus", refreshToday);
+      document.removeEventListener("visibilitychange", refreshToday);
+    };
+  }, []);
+
+  return today;
+};
 
 /** Localized weekday labels starting on the instance's first day of the week. */
 export const useWeekdayLabels = (weekStartDayOffset: number) => {
@@ -35,13 +69,14 @@ export const useWeekdayLabels = (weekStartDayOffset: number) => {
 export const MonthCalendar = memo(({ month, data, selectedDate, onClick, timeBasis = "create_time" }: MonthCalendarProps) => {
   const t = useTranslate();
   const { generalSetting } = useInstance();
+  const today = useCalendarToday();
   const weekDays = useWeekdayLabels(generalSetting.weekStartDayOffset);
   const maxCount = useMemo(() => calculateMaxCount(data), [data]);
   const days = useMonthDays({
     month,
     data,
     weekStartDayOffset: generalSetting.weekStartDayOffset,
-    today: getToday(),
+    today,
     selectedDate,
   });
 

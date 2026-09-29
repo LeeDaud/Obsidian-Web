@@ -12,7 +12,7 @@ import type { EditorToolbarProps } from "../types";
 import InsertMenu from "./InsertMenu";
 import VisibilitySelector from "./VisibilitySelector";
 
-const ACTION_BUTTON_CLASSES = "min-h-11 min-w-24 gap-1.5";
+const ACTION_BUTTON_CLASSES = "min-h-11 min-w-24 gap-1.5 border border-border/70";
 
 /**
  * Shortcut chip inside the commit button. While saving, a spinner takes the

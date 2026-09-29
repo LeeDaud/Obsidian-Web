@@ -2,6 +2,12 @@
 
 ## Memos 临时收件箱（2026-09-28 已确认）
 
+### 黑白视觉统一（2026-09-29 已确认）
+
+- [x] 将默认浅色、深色主题的 primary、accent、ring 与侧栏强调 token 改为黑白灰，保留语义状态色。
+- [x] 将活动日历热度改为 Codex 风格中性灰阶，选中态使用前景/背景反转。
+- [x] 完成相关测试、Lint、生产构建、ss-review 与 Memos 部署健康检查（28 项相关测试通过，生产镜像与运行镜像一致，Memos/Echo/Caddy/Vaultwarden 健康）。
+
 ### 00_Inbox、图片与自动投递修订（已确认）
 
 - [x] P7 将新 Memos Markdown 改为 `00_Inbox/yyyyMMdd-HHmmss.md`，同步路径校验、同秒分配和冲突测试；历史 `Memos/` 文件不迁移。

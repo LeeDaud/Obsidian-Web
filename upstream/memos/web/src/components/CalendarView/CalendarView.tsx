@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { deriveDefaultCreateTimeFromDate } from "@/components/MemoEditor/utils/deriveDefaultCreateTime";
@@ -26,6 +26,40 @@ import { useMonthMemos } from "./useMonthMemos";
 const NO_MEMOS: Memo[] = [];
 /** Page padding plus seven legible 72px columns. */
 const RESERVED_BESIDE_PANEL = 48 + 7 * 72;
+
+/** Keep the calendar's "today" marker current when a tab stays open across local midnight. */
+const useToday = (): string => {
+  const [today, setToday] = useState(getToday);
+
+  useEffect(() => {
+    let timer: number;
+
+    const scheduleNextDay = () => {
+      window.clearTimeout(timer);
+      const nextDay = new Date();
+      nextDay.setHours(24, 0, 0, 50);
+      timer = window.setTimeout(() => {
+        setToday(getToday());
+        scheduleNextDay();
+      }, nextDay.getTime() - Date.now());
+    };
+    const refreshToday = () => {
+      setToday(getToday());
+      scheduleNextDay();
+    };
+
+    scheduleNextDay();
+    window.addEventListener("focus", refreshToday);
+    document.addEventListener("visibilitychange", refreshToday);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("focus", refreshToday);
+      document.removeEventListener("visibilitychange", refreshToday);
+    };
+  }, []);
+
+  return today;
+};
 
 export interface CalendarViewProps {
   /** `YYYY-MM` */
@@ -91,7 +125,7 @@ export const CalendarView = ({ month, date }: CalendarViewProps) => {
     [navigate, month, search, pathname],
   );
 
-  const today = getToday();
+  const today = useToday();
   const activeDate = date ?? (md ? undefined : getDefaultDate(month, today));
   const activeMemos = (activeDate && model[activeDate]?.memos) || NO_MEMOS;
   const dateLabel = useMemo(
