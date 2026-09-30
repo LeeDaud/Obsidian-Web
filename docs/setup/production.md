@@ -86,6 +86,16 @@ docker start echo-capture
 - 后续版本已启用保存后自动投递、设备暂存、双击编辑与图片附件快照。新正文写入 `00_Inbox/yyyyMMdd-HHmmss.md`；历史 `Memos/` 文件和队列记录保持原位。
 - 图片合成验收 Memo `memos/3sYx8n8tpXbYhPUzypKWNH` 已自动投递为 `00_Inbox/20260928-231707.md`，commit `e5e9c240e4cbec90a6cf01b19fc6ce65380110e7`；Markdown 引用与附件二进制均按该 commit 核验一致。
 
+## 2026-09-30 续写与 Obsidian 反链部署
+
+- 源码提交 `3710fb7` 已推送至 `LeeDaud/Obsidian-Web` 的 `main`。
+- 继续使用压缩包上传至 `/opt/echo/releases/20260928` 后由服务器 Docker 多阶段构建，不在服务器 clone 或 pull Git 仓库。
+- Memos 前端使用 Node 24.14 构建成功，后端使用 Go 1.27 编译成功；沿用既有 CSS `::highlight` 与 chunk size 警告。
+- 运行镜像为 Echo `sha256:840d183bf44bd9726df15dedc58cad63fca7e85ac3978bc73ad918ad9c297fc5`、Memos `sha256:844faefca19b4fdd0240a606ef6d3ba1d597fba262263338daf3b67f073a1d43`，与新构建镜像一致。
+- `echo-capture` 与 `echo-memos` 重建后均为 healthy；Caddy 与 Vaultwarden 未重建，Vaultwarden 继续 healthy。
+- `https://echo.leedaud.xyz`、`https://memos.leedaud.xyz` 与 `https://bitwarden.leedaud.xyz` 均返回 200。旧 Jike 域名在本次检查中连接码为 `000`，不影响三个正式入口。
+- 本轮未创建或删除真实笔记；续写的 GitHub WikiLink 与 Obsidian 反链仍待用户实际操作验收。
+
 ## 2026-09-21 手动上传版本
 
 - 已部署镜像 `sha256:7797f53f1bbdb5c31830dc8f78593d8afa44c76fa14dd937d2ca0925dbdb85a9`；`echo-capture`、Caddy 与 Vaultwarden 均健康，两个公网入口返回 200。
