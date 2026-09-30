@@ -120,6 +120,12 @@ docker start echo-capture
 - Go bridge 定向测试、Echo Memos 22 项测试、TypeScript、Memos lint/build 与差异检查通过。未创建新的生产合成笔记或 GitHub 笔记提交。
 - Echo 运行镜像为 `sha256:d774d5b12a6a3d27e91a93ac2ecd8de437a195ad340fd26a124ab3880413b9bd`，Memos 运行镜像为 `sha256:4e12f2f23e9e6ed65f49b0fcf8405da1a763135c50bc176aaebdd4fab4130a2e`；两者均 healthy。Caddy 与 Vaultwarden 未重建且正常，三个正式入口均返回 200。
 
+### 按最终笔记名归档附件
+
+- 提交 `ee31490` 已推送并部署。Echo 在分配最终 Markdown 路径后，将新附件重定基为 `attachments/<最终笔记名>/<附件时间戳>[-NN].ext`，正文使用 `../attachments/...` 标准相对路径。
+- 同秒笔记冲突改名时附件目录同步改名；同一笔记后续版本沿用首次分配的目录；历史 `attachments/memos/...` 队列和文件继续兼容且不迁移、不删除。
+- TypeScript、Echo Memos 24 项测试和差异检查通过。仅重建 `echo-capture`，运行镜像为 `sha256:41c93bb94eaff7808bb1451a4e89581601af3dea0f9e91db30062f72be074fa3`；`echo-memos` 未重建。两个应用容器及 Vaultwarden 均 healthy，三个正式入口返回 200。
+
 ## 2026-09-21 手动上传版本
 
 - 已部署镜像 `sha256:7797f53f1bbdb5c31830dc8f78593d8afa44c76fa14dd937d2ca0925dbdb85a9`；`echo-capture`、Caddy 与 Vaultwarden 均健康，两个公网入口返回 200。

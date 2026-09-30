@@ -6,7 +6,7 @@
 - [x] D2 Markdown 使用 `../attachments/<笔记名>/...`，正文和附件摘要随路径重写后重新核验。
 - [x] D3 保留 `attachments/memos/...` 历史队列兼容，并支持同秒冲突改名和后续版本沿用目录。
 - [x] D4 TypeScript、Echo Memos 24 项测试和差异检查通过。
-- [ ] D5 自动提交、推送、部署并完成生产健康检查。
+- [x] D5 提交 `ee31490`、推送并部署 Echo；Echo、Memos、Caddy 与 Vaultwarden 健康，正式入口返回 200。
 
 ## Memos 附件时间戳与 Obsidian 路径（2026-09-30 已确认）
 
