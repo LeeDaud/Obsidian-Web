@@ -3,14 +3,13 @@ import type { FC } from "react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import type { Location, Visibility } from "@/types/proto/api/v1/memo_service_pb";
+import type { Location } from "@/types/proto/api/v1/memo_service_pb";
 import { useTranslate } from "@/utils/i18n";
 import { primaryModifierGlyph } from "@/utils/platform";
 import { validationService } from "../services";
 import { useEditorContext, useEditorSelector } from "../state";
 import type { EditorToolbarProps } from "../types";
 import InsertMenu from "./InsertMenu";
-import VisibilitySelector from "./VisibilitySelector";
 
 const ACTION_BUTTON_CLASSES = "min-h-11 w-full min-w-0 gap-1.5 border border-border/70 sm:w-auto sm:min-w-24";
 
@@ -38,7 +37,6 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   onCancel,
   memoName,
   parentMemoName,
-  space,
   onAudioRecorderClick,
   viewToggles,
   onInsertImages,
@@ -55,7 +53,6 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   const justSaved = useEditorSelector((s) => s.ui.justSaved);
   const isUploading = useEditorSelector((s) => s.ui.isLoading.uploading);
   const location = useEditorSelector((s) => s.metadata.location);
-  const visibility = useEditorSelector((s) => s.metadata.visibility);
   // The save transaction is in flight or its confirmation is holding the
   // editor open; either way the toolbar is frozen.
   const committing = isSaving || justSaved;
@@ -72,10 +69,6 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
 
   const handleLocationChange = (next?: Location) => {
     dispatch(actions.setMetadata({ location: next }));
-  };
-
-  const handleVisibilityChange = (next: Visibility) => {
-    dispatch(actions.setMetadata({ visibility: next }));
   };
 
   const commitButton = justSaved ? (
@@ -100,56 +93,50 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
 
   return (
     // Every control on this rail is 28px, the same box as the sidebar's compose control and nav pills.
-    <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-1">
-      <div className="flex min-w-0 flex-row items-center justify-start gap-1">
-        <InsertMenu
-          isUploading={isUploading}
-          isSaving={committing}
-          location={location}
-          onLocationChange={handleLocationChange}
-          memoName={memoName}
-          onAudioRecorderClick={onAudioRecorderClick}
-          viewToggles={viewToggles}
-          onInsertImages={onInsertImages}
-        />
-        <VisibilitySelector value={visibility} space={space} onChange={handleVisibilityChange} />
-      </div>
-
-      <div className="grid w-full min-w-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:justify-end sm:gap-1">
+    <div className="grid w-full min-w-0 grid-cols-[2.75rem_minmax(0,1fr)_minmax(0,1fr)] gap-2 sm:flex sm:items-center sm:justify-end sm:gap-1">
+      <Button
+        variant="quiet"
+        size="sm"
+        className={ACTION_BUTTON_CLASSES}
+        onClick={onDraft}
+        disabled={committing}
+        aria-label="暂存到当前设备"
+      >
+        <ArchiveIcon className="size-4" />
+        暂存
+      </Button>
+      <InsertMenu
+        isUploading={isUploading}
+        isSaving={committing}
+        location={location}
+        onLocationChange={handleLocationChange}
+        memoName={memoName}
+        onAudioRecorderClick={onAudioRecorderClick}
+        viewToggles={viewToggles}
+        onInsertImages={onInsertImages}
+      />
+      {onCancel && (
         <Button
           variant="quiet"
           size="sm"
-          className={ACTION_BUTTON_CLASSES}
-          onClick={onDraft}
+          className="order-first col-span-3 min-h-11 w-full border border-border/70 sm:order-none sm:min-h-0 sm:w-auto"
+          onClick={onCancel}
           disabled={committing}
-          aria-label="暂存到当前设备"
         >
-          <ArchiveIcon className="size-4" />
-          暂存
+          {t("common.cancel")}
         </Button>
-        {onCancel && (
-          <Button
-            variant="quiet"
-            size="sm"
-            className="order-first col-span-2 min-h-11 w-full border border-border/70 sm:order-none sm:min-h-0 sm:w-auto"
-            onClick={onCancel}
-            disabled={committing}
-          >
-            {t("common.cancel")}
-          </Button>
-        )}
+      )}
 
-        {blockedMessage ? (
-          <Tooltip>
-            <TooltipTrigger render={<span className="inline-flex w-full min-w-0 sm:w-auto" tabIndex={0} aria-label={blockedMessage} />}>
-              {commitButton}
-            </TooltipTrigger>
-            <TooltipContent side="top">{blockedMessage}</TooltipContent>
-          </Tooltip>
-        ) : (
-          commitButton
-        )}
-      </div>
+      {blockedMessage ? (
+        <Tooltip>
+          <TooltipTrigger render={<span className="inline-flex w-full min-w-0 sm:w-auto" tabIndex={0} aria-label={blockedMessage} />}>
+            {commitButton}
+          </TooltipTrigger>
+          <TooltipContent side="top">{blockedMessage}</TooltipContent>
+        </Tooltip>
+      ) : (
+        commitButton
+      )}
     </div>
   );
 };
