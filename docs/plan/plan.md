@@ -397,3 +397,12 @@ Markdown 中只写一条正向 WikiLink。所谓“双链”由 Obsidian 基于�
 - 不修改 Memos 数据库中的原始附件名，不迁移或删除 GitHub 已存在的历史附件。
 - 生成的 Markdown 不含 `/file/attachments/`；bundle 中每个引用都对应同一次 Git commit 内的实际附件。
 - Go 定向测试、Echo 测试、Memos lint/build、差异检查和 ss-review 通过后，按用户最新授权自动提交、推送并部署。
+
+### 2026-09-30 目录结构精简修订（待确认）
+
+- 新投递最终结构改为 `attachments/<最终笔记名去除 .md>/<附件时间戳>[-NN].ext`，不再包含 `attachments/memos`。
+- 目录名必须取 Echo 分配后的最终 Markdown 文件名，而不是 bridge 的候选时间；例如 `00_Inbox/20260930-112500.md` 对应 `attachments/20260930-112500/`。
+- Markdown 从 `00_Inbox` 指向仓库根附件时写成 `../attachments/20260930-112500/20260930-112458.png`，保证标准相对路径和 Obsidian 均可解析。
+- bridge 仍提供受限的候选附件记录；Echo 在完成笔记路径分配后原子重定基附件路径、正文引用与 bundle 校验，确保正文和附件在同一 Git commit 中一致。
+- 历史 `attachments/memos/<memo-uid>/...` 与 SHA-256 文件继续兼容，不迁移、不删除；仅新投递和后续新版本使用精简结构。
+- 增加同秒笔记重命名、更新沿用目录、多附件同秒、续写独立目录、旧队列恢复和路径穿越拒绝测试。

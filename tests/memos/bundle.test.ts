@@ -31,6 +31,8 @@ describe('Memos multi-file GitHub delivery', () => {
       `attachments/memos/note-1/${hash}.png`,
       'attachments/memos/note-1/20260930-091523.png',
       'attachments/memos/note-1/20260930-091523-02.png',
+      'attachments/20260930-091600/20260930-091523.png',
+      'attachments/20260930-091600/20260930-091523-02.png',
     ]) {
       validateBundle({ submissionId: 'attachment-path', revision: 1, files: [
         bundleFile(filename, Buffer.from('memo')), bundleFile(attachment, image),

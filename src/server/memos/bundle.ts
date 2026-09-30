@@ -39,8 +39,9 @@ export function validateBundle(delivery: BundleDelivery): void {
   for (const file of delivery.files) {
     const markdown = /^(?:00_Inbox|Memos)\/[0-9]{8}-[0-9]{6}\.md$/.test(file.path);
     const legacyAttachment = /^attachments\/memos\/[a-zA-Z0-9-]{1,80}\/([0-9a-f]{64})\.[a-z0-9]{1,10}$/.exec(file.path);
-    const timestampAttachment = /^attachments\/memos\/[a-zA-Z0-9-]{1,80}\/[0-9]{8}-[0-9]{6}(?:-[0-9]{2})?\.[a-z0-9]{1,10}$/.test(file.path);
-    const attachment = legacyAttachment !== null || timestampAttachment;
+    const bridgeTimestampAttachment = /^attachments\/memos\/[a-zA-Z0-9-]{1,80}\/[0-9]{8}-[0-9]{6}(?:-[0-9]{2})?\.[a-z0-9]{1,10}$/.test(file.path);
+    const vaultAttachment = /^attachments\/[0-9]{8}-[0-9]{6}\/[0-9]{8}-[0-9]{6}(?:-[0-9]{2})?\.[a-z0-9]{1,10}$/.test(file.path);
+    const attachment = legacyAttachment !== null || bridgeTimestampAttachment || vaultAttachment;
     if (!markdown && !attachment) throw new AppError(400, 'INVALID_BUNDLE', `投递路径无效：${file.path}`);
     if (paths.has(file.path.toLowerCase())) throw new AppError(400, 'INVALID_BUNDLE', `投递路径重复：${file.path}`);
     if (typeof file.base64 !== 'string') throw new AppError(400, 'INVALID_BUNDLE', `投递编码无效：${file.path}`);

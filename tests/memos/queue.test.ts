@@ -11,6 +11,16 @@ const input = (revision = 1, content = '合成笔记'): Submission => ({
   instance: 'local', owner: 'users/test', memo: 'memos/test',
   delivery: { submissionId: `submit-${revision}`, revision, files: [bundleFile('00_Inbox/20260928-120000.md', Buffer.from(content))] },
 });
+const inputWithAttachment = (memo = 'memos/test', revision = 1): Submission => {
+  const attachment = 'attachments/memos/memo-uid/20260928-115959.png';
+  return {
+    instance: 'local', owner: 'users/test', memo,
+    delivery: { submissionId: `attachment-${revision}`, revision, files: [
+      bundleFile('00_Inbox/20260928-120000.md', Buffer.from(`图片：![](${attachment})`)),
+      bundleFile(attachment, Buffer.from(`image-${revision}`)),
+    ] },
+  };
+};
 async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'memos-queue-test-'));
   const queue = await SubmissionQueue.create(root, process.cwd());
@@ -54,6 +64,37 @@ describe('explicit Memos submission queue', () => {
       expect(storedFirst.delivery.files[0].path).toBe('00_Inbox/20260928-120000.md');
       expect(storedSecond.delivery.files[0].path).toBe('00_Inbox/20260928-120001.md');
       expect((await queue.enqueue(second)).delivery.files[0].path).toBe('00_Inbox/20260928-120001.md');
+    } finally { await queue.close(); }
+  });
+  it('groups attachments under the final note name and rewrites Markdown to a vault-relative path', async () => {
+    const { queue } = await fixture();
+    const first = inputWithAttachment();
+    const second = inputWithAttachment('memos/second');
+    second.delivery.submissionId = 'attachment-second';
+    try {
+      const storedFirst = await queue.enqueue(first);
+      const storedSecond = await queue.enqueue(second);
+      expect(storedFirst.delivery.files.map(file => file.path)).toEqual([
+        '00_Inbox/20260928-120000.md',
+        'attachments/20260928-120000/20260928-115959.png',
+      ]);
+      expect(Buffer.from(storedFirst.delivery.files[0].base64, 'base64').toString()).toContain(
+        '![](../attachments/20260928-120000/20260928-115959.png)',
+      );
+      expect(storedSecond.delivery.files.map(file => file.path)).toEqual([
+        '00_Inbox/20260928-120001.md',
+        'attachments/20260928-120001/20260928-115959.png',
+      ]);
+      expect((await queue.enqueue(second)).fingerprint).toBe(storedSecond.fingerprint);
+    } finally { await queue.close(); }
+  });
+  it('keeps later revisions in the directory allocated to the original note', async () => {
+    const { queue } = await fixture();
+    try {
+      await queue.enqueue(inputWithAttachment());
+      const update = inputWithAttachment('memos/test', 2);
+      const stored = await queue.enqueue(update);
+      expect(stored.delivery.files[1].path).toBe('attachments/20260928-120000/20260928-115959.png');
     } finally { await queue.close(); }
   });
   it('waits for the verified parent and publishes a continuation link without changing the parent', async () => {

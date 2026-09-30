@@ -49,6 +49,25 @@ const normalizeMarkdownPath = (value: string) => {
   return legacy ? `00_Inbox/${legacy[1]}` : value;
 };
 function markdownPath(input: Submission): string { return input.delivery.files.find(file => isMarkdownPath(file.path))!.path; }
+function rebaseAttachments(input: Submission): void {
+  const markdown = input.delivery.files.find(file => isMarkdownPath(file.path));
+  if (!markdown) throw new AppError(400, 'INVALID_BUNDLE', '缺少正文文件。');
+  const noteName = path.posix.basename(markdown.path, '.md');
+  let content = Buffer.from(markdown.base64, 'base64').toString('utf8');
+  input.delivery.files = input.delivery.files.map(file => {
+    if (isMarkdownPath(file.path)) return file;
+    const target = `attachments/${noteName}/${path.posix.basename(file.path)}`;
+    if (file.path !== target) {
+      const escaped = file.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      content = content.replace(new RegExp(`(?:\\.\\./)?${escaped}`, 'g'), `../${target}`);
+    }
+    return { ...file, path: target };
+  });
+  input.delivery.files = input.delivery.files.map(file => isMarkdownPath(file.path)
+    ? bundleFile(file.path, Buffer.from(content), file.expectedBlob)
+    : file);
+  validateBundle(input.delivery);
+}
 function continuationDelivery(record: SubmissionRecord, parent: SubmissionRecord): BundleDelivery {
   const parentName = path.posix.basename(markdownPath(parent), '.md');
   const link = `\n\n---\n续写自：[[${parentName}]]`;
@@ -142,8 +161,12 @@ export class SubmissionQueue {
       if (existing) {
         const allocated = markdownPath(existing);
         snapshot.delivery.files = snapshot.delivery.files.map(file => isMarkdownPath(file.path) ? { ...file, path: allocated } : file);
+        const bridgeHash = fingerprint(snapshot);
+        rebaseAttachments(snapshot);
         const hash = fingerprint(snapshot);
-        if (existing.fingerprint !== hash) throw new AppError(409, 'IDEMPOTENCY_CONFLICT', '提交标识已用于其他内容。');
+        if (existing.fingerprint !== hash && existing.fingerprint !== bridgeHash) {
+          throw new AppError(409, 'IDEMPOTENCY_CONFLICT', '提交标识已用于其他内容。');
+        }
         return existing;
       }
       const prior = all.filter(record => sourceKey(record) === sourceKey(snapshot));
@@ -159,6 +182,7 @@ export class SubmissionQueue {
         while (all.some(record => record.delivery.files.some(file => file.path === allocated))) allocated = nextMarkdownPath(allocated);
         snapshot.delivery.files = snapshot.delivery.files.map(file => isMarkdownPath(file.path) ? { ...file, path: allocated } : file);
       }
+      rebaseAttachments(snapshot);
       const hash = fingerprint(snapshot);
       const record: SubmissionRecord = { ...snapshot, format: 1, fingerprint: hash, state: 'pending', failures: 0, retryAt: 0 };
       await this.write(record); return structuredClone(record);
