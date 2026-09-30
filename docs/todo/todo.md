@@ -6,7 +6,7 @@
 - [x] A2 统一替换 Memos 托管附件 URL 的相对、同源绝对、有/无文件名及查询参数形式，不追加重复引用。
 - [x] A3 Echo bundle 同时接受新时间戳路径与历史摘要路径，保持旧队列兼容。
 - [x] A4 Go bridge 定向测试、Echo Memos 22 项测试、类型检查、Memos lint/build、差异检查和 ss-review 通过。
-- [ ] A5 自动提交、推送并部署；检查 Memos、Echo、Caddy 与 Vaultwarden 健康状态。
+- [x] A5 提交 `fc3b7a2`、推送并部署；Memos、Echo、Caddy 与 Vaultwarden 健康，正式入口返回 200。
 
 ## Memos 手机按钮与图标对齐（2026-09-30 已确认）
 

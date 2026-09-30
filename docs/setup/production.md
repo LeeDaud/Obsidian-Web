@@ -113,6 +113,13 @@ docker start echo-capture
 - Memos 运行镜像更新为 `sha256:5b018cd9e2594d634b4ae7331326897f4704570d08215d13f781eff089160de3`；`echo-memos` 与 `echo-capture` 均为 healthy，Memos、Echo 与 Vaultwarden 公网入口均返回 200。
 - 附件按钮居中修复提交 `9ac008e` 已推送并部署；手机网格列宽修正为“等宽暂存｜44px 附件｜等宽保存”。运行镜像更新为 `sha256:e171f2f2fb405145dedeb67429384f6a776fd877f4a3619a2fa71c494c8cd332`，相关容器保持 healthy，三个正式入口继续返回 200。
 
+## 2026-09-30 Memos 附件命名与 Obsidian 路径修复
+
+- 源码提交 `fc3b7a2` 已推送至 `main`。新附件按自身上海创建时间写入 `attachments/memos/<memo-uid>/yyyyMMdd-HHmmss[-NN].ext`；历史摘要文件不迁移、不删除，Echo 继续接受旧路径记录。
+- bridge 现在按附件 UID 归一化相对及同源绝对 `/file/attachments/...` 地址，兼容省略文件名、URL 转义和查询参数；其他来源 URL 不改写。
+- Go bridge 定向测试、Echo Memos 22 项测试、TypeScript、Memos lint/build 与差异检查通过。未创建新的生产合成笔记或 GitHub 笔记提交。
+- Echo 运行镜像为 `sha256:d774d5b12a6a3d27e91a93ac2ecd8de437a195ad340fd26a124ab3880413b9bd`，Memos 运行镜像为 `sha256:4e12f2f23e9e6ed65f49b0fcf8405da1a763135c50bc176aaebdd4fab4130a2e`；两者均 healthy。Caddy 与 Vaultwarden 未重建且正常，三个正式入口均返回 200。
+
 ## 2026-09-21 手动上传版本
 
 - 已部署镜像 `sha256:7797f53f1bbdb5c31830dc8f78593d8afa44c76fa14dd937d2ca0925dbdb85a9`；`echo-capture`、Caddy 与 Vaultwarden 均健康，两个公网入口返回 200。
