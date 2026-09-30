@@ -93,7 +93,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
 
   return (
     // Every control on this rail is 28px, the same box as the sidebar's compose control and nav pills.
-    <div className="grid w-full min-w-0 grid-cols-[2.75rem_minmax(0,1fr)_minmax(0,1fr)] gap-2 sm:flex sm:items-center sm:justify-end sm:gap-1">
+    <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_2.75rem_minmax(0,1fr)] gap-2 sm:flex sm:items-center sm:justify-end sm:gap-1">
       <Button
         variant="quiet"
         size="sm"
