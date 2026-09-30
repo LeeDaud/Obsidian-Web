@@ -6,7 +6,7 @@ import { FOCUS_VISIBLE_OUTLINE_CLASSES } from "./focus";
 
 const buttonVariants = cva(
   cn(
-    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0",
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium leading-none transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:block [&_svg]:basis-auto [&_svg]:align-middle [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0",
     FOCUS_VISIBLE_OUTLINE_CLASSES,
   ),
   {

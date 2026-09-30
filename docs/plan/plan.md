@@ -334,3 +334,41 @@ Markdown 中只写一条正向 WikiLink。所谓“双链”由 Obsidian 基于�
 ### 回滚
 
 关闭续写功能开关即可恢复现有编辑与投递路径；新增队列字段由兼容读取忽略，无需数据库回滚。已经生成的续写 Markdown 是普通 Markdown 与 WikiLink，回滚后仍能在 Obsidian 中正常使用，不删除或改写。
+## 2026-09-30 Memos 手机按钮与图标对齐修订
+
+### 已确认问题
+
+1. 编辑器底栏在 320px 宽度下同时放置插入、可见性、暂存和保存控件；两个操作按钮各自固定 `min-w-24`，左右分组不换行且按钮基类全局 `shrink-0`，总宽度超过编辑器内容区后会挤压或溢出，图标随之偏离预期位置。
+2. `icon-sm` 和 `icon-compact` 分别只有 24px、28px。它们在桌面表头中可成立，但在手机上既小于 44px 触控目标，也容易与 48px 顶栏、44px 编辑操作按钮及系统字体缩放产生不同的视觉中心。
+3. 页面 viewport 未启用 `viewport-fit=cover`。iPhone 刘海屏、底部 Home Indicator 和添加到主屏幕模式下，`safe-area-inset-*` 不能完整参与布局。
+4. 格式工具栏虽然会根据容器宽度折叠命令，但其紧凑按钮仍沿用桌面尺寸；编辑器底栏则没有等价的窄屏布局规则。
+
+### 修复范围
+
+- 保留 Memos 原版结构、图标、颜色和菜单，不做视觉重绘。
+- 为全局按钮增加明确的图标盒对齐规则：SVG 使用 block 布局、固定 flex basis、禁止行高影响，并区分桌面紧凑尺寸与粗指针手机触控外框。
+- 编辑器底栏在窄屏改为稳定的两行布局：元数据操作一行，暂存/保存一行；两个主要按钮等宽填满，不再使用会导致横向溢出的固定最小宽度。中等及以上宽度保持单行原版布局。
+- 格式工具栏在粗指针设备上扩大可点击外框，同时保持 16px 图标视觉尺寸；命令过多时继续折叠到“更多”，不允许水平挤出。
+- viewport 增加 `viewport-fit=cover`，顶栏、全屏编辑器和底部浮层使用现有 `env(safe-area-inset-*)` 处理安全区。
+- 审查顶部菜单、笔记卡片操作、编辑器插入/可见性/暂存/保存、格式工具栏、对话框关闭按钮；只修改实际存在错位或触控不足的组件。
+
+### 验收标准
+
+- 320×568、375×812、390×844、430×932 下页面无横向溢出。
+- 编辑器底栏所有图标与文字在按钮内水平、垂直居中；暂存和保存外观一致，宽度稳定。
+- 手机粗指针下主要图标按钮触控区域不小于 44×44px，视觉图标仍为 16px，不因放大触控区而变形。
+- 展开格式工具栏、可见性菜单、更多菜单和全屏编辑器后均不遮挡退出按钮。
+- 刘海屏与 Home Indicator 区域不覆盖顶部导航、编辑器操作区或底部浮层。
+- 桌面细指针布局保持现有 24/28px 紧凑密度。
+- Memos 前端 lint、生产构建、相关组件测试和移动端浏览器截图检查通过；执行 ss-review。
+
+### 预计文件
+
+- `upstream/memos/web/index.html`
+- `upstream/memos/web/src/index.css`
+- `upstream/memos/web/src/components/ui/button.tsx`
+- `upstream/memos/web/src/components/MemoEditor/Toolbar/EditorToolbar.tsx`
+- `upstream/memos/web/src/components/MemoEditor/Toolbar/FormattingToolbar.tsx`
+- 相关前端测试与 `docs/setup/verification.md`
+
+生产部署继续使用现有压缩包上传和 Docker 多阶段构建流程；代码验收后再单独执行部署与线上检查。

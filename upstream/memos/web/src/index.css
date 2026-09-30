@@ -29,12 +29,21 @@
 
   body {
     @apply bg-background text-foreground;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   /* Search hits in memo bodies (CSS Custom Highlight API, registered by useSearchMatchHighlight).
      A translucent wash of the theme's amber keeps the text's own color legible on every theme. */
   ::highlight(memo-search-match) {
     background-color: color-mix(in oklch, var(--warning) 40%, transparent);
+  }
+}
+
+@utility touch-target-coarse {
+  @media (pointer: coarse) {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
   }
 }
 

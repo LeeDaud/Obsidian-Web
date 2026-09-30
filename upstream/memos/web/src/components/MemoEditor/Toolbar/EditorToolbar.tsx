@@ -12,7 +12,7 @@ import type { EditorToolbarProps } from "../types";
 import InsertMenu from "./InsertMenu";
 import VisibilitySelector from "./VisibilitySelector";
 
-const ACTION_BUTTON_CLASSES = "min-h-11 min-w-24 gap-1.5 border border-border/70";
+const ACTION_BUTTON_CLASSES = "min-h-11 w-full min-w-0 gap-1.5 border border-border/70 sm:w-auto sm:min-w-24";
 
 /**
  * Shortcut chip inside the commit button. While saving, a spinner takes the
@@ -100,8 +100,8 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
 
   return (
     // Every control on this rail is 28px, the same box as the sidebar's compose control and nav pills.
-    <div className="flex w-full flex-row items-center justify-between">
-      <div className="flex flex-row items-center justify-start gap-1">
+    <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-1">
+      <div className="flex min-w-0 flex-row items-center justify-start gap-1">
         <InsertMenu
           isUploading={isUploading}
           isSaving={committing}
@@ -115,7 +115,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
         <VisibilitySelector value={visibility} space={space} onChange={handleVisibilityChange} />
       </div>
 
-      <div className="flex flex-row items-center justify-end gap-1">
+      <div className="grid w-full min-w-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:justify-end sm:gap-1">
         <Button
           variant="quiet"
           size="sm"
@@ -128,14 +128,20 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
           暂存
         </Button>
         {onCancel && (
-          <Button variant="quiet" size="sm" onClick={onCancel} disabled={committing}>
+          <Button
+            variant="quiet"
+            size="sm"
+            className="order-first col-span-2 min-h-11 w-full border border-border/70 sm:order-none sm:min-h-0 sm:w-auto"
+            onClick={onCancel}
+            disabled={committing}
+          >
             {t("common.cancel")}
           </Button>
         )}
 
         {blockedMessage ? (
           <Tooltip>
-            <TooltipTrigger render={<span className="inline-flex" tabIndex={0} aria-label={blockedMessage} />}>
+            <TooltipTrigger render={<span className="inline-flex w-full min-w-0 sm:w-auto" tabIndex={0} aria-label={blockedMessage} />}>
               {commitButton}
             </TooltipTrigger>
             <TooltipContent side="top">{blockedMessage}</TooltipContent>
