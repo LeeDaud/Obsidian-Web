@@ -96,6 +96,16 @@ docker start echo-capture
 - `https://echo.leedaud.xyz`、`https://memos.leedaud.xyz` 与 `https://bitwarden.leedaud.xyz` 均返回 200。旧 Jike 域名在本次检查中连接码为 `000`，不影响三个正式入口。
 - 本轮未创建或删除真实笔记；续写的 GitHub WikiLink 与 Obsidian 反链仍待用户实际操作验收。
 
+## 2026-09-30 Memos 手机操作栏修复部署
+
+- 源码提交 `abbb6cd` 已推送至 `LeeDaud/Obsidian-Web` 的 `main`。
+- 手机编辑器操作区改为固定两列；普通状态下暂存与保存等宽，续写状态下取消按钮独占上一行，暂存与保存保持第二行两列。
+- 粗指针设备的编辑器图标按钮使用至少 44px 触控区域，并统一 SVG 基线；页面启用 `viewport-fit=cover` 与稳定文本缩放。
+- 本地 Memos lint、TypeScript 检查、生产构建与 `git diff --check` 通过；ss-review 未发现对原版界面层级、颜色或桌面密度的偏离。完整上游测试中时间戳导航和自动草稿两个既有测试组共 7 项失败并存在未关闭句柄，本次未修改对应逻辑。
+- 服务器使用 Node 24.14 和 Go 1.27 完成构建；Memos 运行镜像为 `sha256:1348cf5cabf4fd0789a7a9dde28047377e2d03d621768cc7b11a1252bb981874`。
+- `echo-memos` 与 `echo-capture` 均为 healthy；Caddy 和 Vaultwarden 未重建且继续正常。`memos.leedaud.xyz`、`echo.leedaud.xyz` 与 `bitwarden.leedaud.xyz` 均返回 200。
+- 未使用用户真实笔记执行写入测试；已登录手机实机仍需复核普通保存和续写两种操作栏状态。
+
 ## 2026-09-21 手动上传版本
 
 - 已部署镜像 `sha256:7797f53f1bbdb5c31830dc8f78593d8afa44c76fa14dd937d2ca0925dbdb85a9`；`echo-capture`、Caddy 与 Vaultwarden 均健康，两个公网入口返回 200。
