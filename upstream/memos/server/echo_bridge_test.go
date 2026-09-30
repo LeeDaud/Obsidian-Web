@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -69,16 +70,54 @@ func TestBuildEchoSubmissionIncludesAndRewritesImage(t *testing.T) {
 	memo := &store.Memo{UID: "memo-uid", CreatedTs: 1789992000, UpdatedTs: 1789992061,
 		Content: "图片：![](/file/attachments/image-uid/photo.png)"}
 	submission, err := buildEchoSubmission("https://memos.example.com", 7, memo, []echoAttachment{{
-		UID: "image-uid", Filename: "photo.png", Type: "image/png", Blob: []byte{0x89, 0x50, 0x4e, 0x47},
+		UID: "image-uid", Filename: "photo.png", Type: "image/png", Blob: []byte{0x89, 0x50, 0x4e, 0x47}, CreatedTs: 1789992000,
 	}})
 	require.NoError(t, err)
 	require.Len(t, submission.Delivery.Files, 2)
 	require.Equal(t, "00_Inbox/20260921-200000.md", submission.Delivery.Files[0].Path)
-	require.Regexp(t, `^attachments/memos/memo-uid/[0-9a-f]{64}\.png$`, submission.Delivery.Files[1].Path)
+	require.Equal(t, "attachments/memos/memo-uid/20260921-200000.png", submission.Delivery.Files[1].Path)
 	decoded, err := base64.StdEncoding.DecodeString(submission.Delivery.Files[0].Base64)
 	require.NoError(t, err)
 	require.Contains(t, string(decoded), submission.Delivery.Files[1].Path)
 	require.NotContains(t, string(decoded), "/file/attachments/")
+}
+
+func TestBuildEchoSubmissionRewritesManagedAttachmentURLVariants(t *testing.T) {
+	variants := []string{
+		"![](/file/attachments/image-uid)",
+		"![](/file/attachments/image-uid/photo%20one.png?download=1)",
+		"![](https://memos.example.com/file/attachments/image-uid/photo%20one.png)",
+	}
+	for _, content := range variants {
+		t.Run(content, func(t *testing.T) {
+			memo := &store.Memo{UID: "memo-uid", CreatedTs: 1789992000, UpdatedTs: 1789992061, Content: content}
+			submission, err := buildEchoSubmission("https://memos.example.com", 7, memo, []echoAttachment{{
+				UID: "image-uid", Filename: "photo one.png", Type: "image/png", Blob: []byte("image"), CreatedTs: 1789992000,
+			}})
+			require.NoError(t, err)
+			decoded, err := base64.StdEncoding.DecodeString(submission.Delivery.Files[0].Base64)
+			require.NoError(t, err)
+			require.NotContains(t, string(decoded), "/file/attachments/")
+			require.Equal(t, 1, strings.Count(string(decoded), submission.Delivery.Files[1].Path))
+		})
+	}
+}
+
+func TestRewriteManagedAttachmentPathLeavesAnotherOriginUntouched(t *testing.T) {
+	content := "![](https://evil.example/file/attachments/image-uid/photo.png)"
+	require.Equal(t, content, rewriteManagedAttachmentPath(content, "https://memos.example.com", "image-uid", "attachments/photo.png"))
+}
+
+func TestBuildEchoSubmissionAddsStableSuffixForAttachmentsCreatedTogether(t *testing.T) {
+	memo := &store.Memo{UID: "memo-uid", CreatedTs: 1789992000, UpdatedTs: 1789992061,
+		Content: "![](/file/attachments/image-b/b.png)\n![](/file/attachments/image-a/a.png)"}
+	submission, err := buildEchoSubmission("https://memos.example.com", 7, memo, []echoAttachment{
+		{UID: "image-b", Filename: "b.png", Type: "image/png", Blob: []byte("b"), CreatedTs: 1789992000},
+		{UID: "image-a", Filename: "a.png", Type: "image/png", Blob: []byte("a"), CreatedTs: 1789992000},
+	})
+	require.NoError(t, err)
+	require.Equal(t, "attachments/memos/memo-uid/20260921-200000.png", submission.Delivery.Files[1].Path)
+	require.Equal(t, "attachments/memos/memo-uid/20260921-200000-02.png", submission.Delivery.Files[2].Path)
 }
 
 func TestSameOrigin(t *testing.T) {
@@ -86,5 +125,3 @@ func TestSameOrigin(t *testing.T) {
 	require.False(t, sameOrigin("https://evil.example", "https://memos.example.com"))
 	require.False(t, sameOrigin("", "https://memos.example.com"))
 }
-
-

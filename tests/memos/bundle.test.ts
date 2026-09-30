@@ -24,6 +24,19 @@ describe('Memos multi-file GitHub delivery', () => {
     validateBundle(delivery);
     expect(delivery.files[0].path).toBe('Memos/20260928-173655.md');
   });
+  it('accepts timestamp attachment names while retaining legacy hash attachment compatibility', () => {
+    const image = Buffer.from('image');
+    const hash = bytesHash(image);
+    for (const attachment of [
+      `attachments/memos/note-1/${hash}.png`,
+      'attachments/memos/note-1/20260930-091523.png',
+      'attachments/memos/note-1/20260930-091523-02.png',
+    ]) {
+      validateBundle({ submissionId: 'attachment-path', revision: 1, files: [
+        bundleFile(filename, Buffer.from('memo')), bundleFile(attachment, image),
+      ] });
+    }
+  });
   it('commits Chinese text and exact binary bytes together after durable checkpoint', async () => {
     const f = fixture();
     const result = await f.remote.publishBundle(f.delivery, async attempt => {

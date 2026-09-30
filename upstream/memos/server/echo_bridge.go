@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -160,7 +162,7 @@ func (s *echoBridgeService) submitMemo(ctx context.Context, userID int32, memoUI
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to read memo attachment")
 		}
-		files = append(files, echoAttachment{UID: attachment.UID, Filename: attachment.Filename, Type: attachment.Type, Blob: blob})
+		files = append(files, echoAttachment{UID: attachment.UID, Filename: attachment.Filename, Type: attachment.Type, Blob: blob, CreatedTs: attachment.CreatedTs})
 	}
 	submission, err := buildEchoSubmission(s.profile.InstanceURL, userID, memo, files, parentUID)
 	if err != nil {
@@ -205,10 +207,21 @@ func (s *echoBridgeService) post(ctx context.Context, submission *echoSubmission
 }
 
 type echoAttachment struct {
-	UID      string
-	Filename string
-	Type     string
-	Blob     []byte
+	UID       string
+	Filename  string
+	Type      string
+	Blob      []byte
+	CreatedTs int64
+}
+
+func rewriteManagedAttachmentPath(content, instance, uid, target string) string {
+	suffix := `/file/attachments/` + regexp.QuoteMeta(uid) + `(?:/[^\s<>()\[\]{}"']*)?(?:\?[^\s<>()\[\]{}"']*)?`
+	instancePrefix := strings.TrimRight(instance, "/")
+	if instancePrefix != "" {
+		content = regexp.MustCompile(regexp.QuoteMeta(instancePrefix)+suffix).ReplaceAllString(content, target)
+	}
+	relative := regexp.MustCompile(`(^|[^[:alnum:]/:])(` + suffix + `)`)
+	return relative.ReplaceAllString(content, "${1}"+target)
 }
 
 func safeAttachmentExtension(filename, mediaType string) (string, error) {
@@ -256,19 +269,32 @@ func buildEchoSubmission(instance string, userID int32, memo *store.Memo, attach
 		}{Memo: "memos/" + parentUID[0]}
 	}
 	submission.Delivery.Revision = revision
-	for _, attachment := range attachments {
+	orderedAttachments := append([]echoAttachment(nil), attachments...)
+	sort.SliceStable(orderedAttachments, func(i, j int) bool {
+		if orderedAttachments[i].CreatedTs != orderedAttachments[j].CreatedTs {
+			return orderedAttachments[i].CreatedTs < orderedAttachments[j].CreatedTs
+		}
+		return orderedAttachments[i].UID < orderedAttachments[j].UID
+	})
+	attachmentNames := map[string]int{}
+	for _, attachment := range orderedAttachments {
 		digest := sha256.Sum256(attachment.Blob)
 		extension, err := safeAttachmentExtension(attachment.Filename, attachment.Type)
 		if err != nil {
 			return nil, err
 		}
-		target := fmt.Sprintf("attachments/memos/%s/%s.%s", memo.UID, hex.EncodeToString(digest[:]), extension)
-		rawPath := "/file/attachments/" + attachment.UID + "/" + attachment.Filename
-		encodedPath := "/file/attachments/" + attachment.UID + "/" + url.PathEscape(attachment.Filename)
-		contentText = strings.ReplaceAll(contentText, instance+rawPath, target)
-		contentText = strings.ReplaceAll(contentText, instance+encodedPath, target)
-		contentText = strings.ReplaceAll(contentText, rawPath, target)
-		contentText = strings.ReplaceAll(contentText, encodedPath, target)
+		attachmentCreatedTs := attachment.CreatedTs
+		if attachmentCreatedTs < 1 {
+			attachmentCreatedTs = memo.CreatedTs
+		}
+		baseName := time.Unix(attachmentCreatedTs, 0).In(zone).Format("20060102-150405")
+		nameKey := baseName + "." + extension
+		attachmentNames[nameKey]++
+		if attachmentNames[nameKey] > 1 {
+			baseName += fmt.Sprintf("-%02d", attachmentNames[nameKey])
+		}
+		target := fmt.Sprintf("attachments/memos/%s/%s.%s", memo.UID, baseName, extension)
+		contentText = rewriteManagedAttachmentPath(contentText, instance, attachment.UID, target)
 		if !strings.Contains(contentText, target) {
 			if strings.HasPrefix(attachment.Type, "image/") {
 				contentText += "\n\n![](" + target + ")"

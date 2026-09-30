@@ -38,7 +38,9 @@ export function validateBundle(delivery: BundleDelivery): void {
   let markdownCount = 0; let attachmentBytes = 0;
   for (const file of delivery.files) {
     const markdown = /^(?:00_Inbox|Memos)\/[0-9]{8}-[0-9]{6}\.md$/.test(file.path);
-    const attachment = /^attachments\/memos\/[a-zA-Z0-9-]{1,80}\/[0-9a-f]{64}\.[a-z0-9]{1,10}$/.test(file.path);
+    const legacyAttachment = /^attachments\/memos\/[a-zA-Z0-9-]{1,80}\/([0-9a-f]{64})\.[a-z0-9]{1,10}$/.exec(file.path);
+    const timestampAttachment = /^attachments\/memos\/[a-zA-Z0-9-]{1,80}\/[0-9]{8}-[0-9]{6}(?:-[0-9]{2})?\.[a-z0-9]{1,10}$/.test(file.path);
+    const attachment = legacyAttachment !== null || timestampAttachment;
     if (!markdown && !attachment) throw new AppError(400, 'INVALID_BUNDLE', `投递路径无效：${file.path}`);
     if (paths.has(file.path.toLowerCase())) throw new AppError(400, 'INVALID_BUNDLE', `投递路径重复：${file.path}`);
     if (typeof file.base64 !== 'string') throw new AppError(400, 'INVALID_BUNDLE', `投递编码无效：${file.path}`);
@@ -52,7 +54,7 @@ export function validateBundle(delivery: BundleDelivery): void {
     const bytes = Buffer.from(file.base64, 'base64');
     if (bytes.length > limit) throw new AppError(413, 'TOO_LARGE', '投递文件超过限制。');
     if (bytes.toString('base64') !== file.base64 || bytesHash(bytes) !== file.sha256 ||
-        (attachment && !file.path.includes('/' + file.sha256 + '.'))) {
+        (legacyAttachment !== null && legacyAttachment[1] !== file.sha256)) {
       throw new AppError(400, 'INVALID_BUNDLE', '投递文件摘要或编码无效。');
     }
     if (markdown) markdownCount++; else attachmentBytes += bytes.length;

@@ -372,3 +372,28 @@ Markdown 中只写一条正向 WikiLink。所谓“双链”由 Obsidian 基于�
 - 相关前端测试与 `docs/setup/verification.md`
 
 生产部署继续使用现有压缩包上传和 Docker 多阶段构建流程；代码验收后再单独执行部署与线上检查。
+## 2026-09-30 Memos 附件时间戳命名与 Obsidian 路径修复
+
+### 目标
+
+- Memos 投递到 Echo/GitHub 后，附件文件使用可读且稳定的上海时间戳名称，不再暴露 64 位内容摘要作为文件名。
+- 导出的 Markdown 只保留 Obsidian 可解析的新附件路径，彻底移除 Memos 的 `/file/attachments/...` 地址，避免同时出现一个失效图片和一个可用图片。
+
+### 已定位原因
+
+- 当前 bridge 用附件 SHA-256 作为 GitHub 文件名，虽能保证唯一性，但电脑端文件名不可读。
+- 路径替换只覆盖“UID + 当前文件名”的少数精确字符串；Memos 还可能生成省略文件名、带查询参数、绝对 URL 或不同转义形式的 `/file/attachments/{uid}`。未命中的旧地址会保留，bridge 随后又追加正确路径，形成一坏一好的两个图片引用。
+
+### 实施范围
+
+1. 将 bridge 附件快照补充附件创建时间；GitHub 路径改为 `attachments/memos/<memo-uid>/yyyyMMdd-HHmmss[-NN].ext`。同一秒同扩展名按稳定顺序增加两位序号；历史已投递文件不迁移、不删除。
+2. 按附件 UID 识别并替换相对或同实例绝对的 Memos 托管附件 URL，兼容有/无文件名、URL 转义与查询参数；每个附件最终只生成一个 Obsidian 引用。
+3. Echo bundle 校验同时接受新的时间戳附件路径和历史摘要路径，保证旧队列可恢复、重试和核验。
+4. 增加多附件同秒命名、旧 URL 变体、无重复引用、历史 bundle 兼容及非法路径拒绝测试。
+
+### 约束与验收
+
+- 时间戳使用附件自身 `CreatedTs` 的 Asia/Shanghai 时间，重试和 memo 更新不改变已分配名称。
+- 不修改 Memos 数据库中的原始附件名，不迁移或删除 GitHub 已存在的历史附件。
+- 生成的 Markdown 不含 `/file/attachments/`；bundle 中每个引用都对应同一次 Git commit 内的实际附件。
+- Go 定向测试、Echo 测试、Memos lint/build、差异检查和 ss-review 通过后，按用户最新授权自动提交、推送并部署。
