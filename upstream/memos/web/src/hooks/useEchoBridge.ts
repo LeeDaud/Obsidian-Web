@@ -7,7 +7,7 @@ interface EchoStatus {
 
 interface EchoSubmissionStatus {
   submissionId: string;
-  state: "pending" | "verified" | "conflict";
+  state: "pending" | "waiting_parent" | "verified" | "conflict";
   revision: number;
 }
 

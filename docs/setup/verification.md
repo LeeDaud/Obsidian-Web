@@ -124,3 +124,12 @@ CI/CD、生产部署、HTTPS、服务器系统服务均未新增或启用。Obsi
 - 生产镜像 `sha256:a06187c0f641c8491b9e36ff0ea81c9edf62c747abed5d171ed9713c203fb976` 已启动，`echo-capture` healthy，HTTPS 匿名入口与 Vaultwarden 均返回 200；线上 `/capture.js` 返回 200，并包含悬浮按钮与状态存储代码。
 - 本机生产 Chromium 仍在等待 `__captureReady` 时超时。服务端和轻量脚本正常，未发现本轮代码错误；限制仍是 3.7 MB Obsidian `app.js` 经当前公网直连线路下载过慢，需启用 Cloudflare 代理后重新做整页验收。
 
+## 2026-09-30 Memos 续写与 Obsidian 反链
+
+- 根项目 `npm run check`：通过；TypeScript、38 项应用测试与 Ignis 构建完成。
+- Echo Memos 定向测试：`tests/memos/queue.test.ts`、`tests/memos/api.test.ts` 共 12 项通过。覆盖父笔记未核验等待、核验后自动恢复、按最终路径生成 WikiLink、旧文件不变、伪造父标识与自引用拒绝。
+- Memos 前端 `pnpm lint`：通过，673 个文件无问题。
+- Memos 前端 `pnpm build`：通过。沿用项目已有的 CSS `::highlight` 和大 chunk 警告。
+- Memos 前端全测试：180 个文件中 178 个通过，1530 项中 1523 项通过。失败为 `memo-header-navigation` 4 项既有时间按钮名称断言，以及 `use-auto-save` 3 项既有参数数量断言；失败文件与本轮修改无交集。
+- Bridge Go 定向测试：未执行。本机先前的临时 Go 目录仍在，但 `go/bin/go.exe` 已不存在；未重新下载工具链或修改全局环境。
+- ss-review：通过。本轮只把原菜单“编辑”文案在 Echo 顶层 memo 上改为“续写”，并复用原版编辑器、菜单项、边框、焦点和触控样式；没有新增颜色、尺寸、布局层或自定义视觉组件。快速双击发生在 bridge 状态返回前时采用新建续写的保守行为，避免覆盖已投递旧笔记。

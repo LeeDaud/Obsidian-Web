@@ -49,6 +49,17 @@ func TestBuildEchoSubmission(t *testing.T) {
 	require.Equal(t, "中文记录", string(decoded))
 }
 
+func TestBuildEchoSubmissionIncludesContinuationParent(t *testing.T) {
+	memo := &store.Memo{UID: "child-uid", CreatedTs: 1789992000, UpdatedTs: 1789992061, Content: "续写内容"}
+	submission, err := buildEchoSubmission("https://memos.example.com", 7, memo, nil, "parent-uid")
+	require.NoError(t, err)
+	require.NotNil(t, submission.Parent)
+	require.Equal(t, "memos/parent-uid", submission.Parent.Memo)
+	decoded, err := base64.StdEncoding.DecodeString(submission.Delivery.Files[0].Base64)
+	require.NoError(t, err)
+	require.Equal(t, "续写内容", string(decoded), "bridge must leave Obsidian path resolution to Echo")
+}
+
 func TestBuildEchoSubmissionRejectsEmptyMemo(t *testing.T) {
 	_, err := buildEchoSubmission("https://memos.example.com", 7, &store.Memo{UID: "memo-uid", CreatedTs: 1, UpdatedTs: 1, Content: "  "}, nil)
 	require.ErrorContains(t, err, "empty memo")

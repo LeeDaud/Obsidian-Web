@@ -44,6 +44,7 @@ const MemoEditorImpl: React.FC<MemoEditorProps> = ({
   parentMemoName,
   defaultSpace,
   defaultLocation,
+  defaultRelations,
   autoFocus,
   onFocusModeExit,
   onFocusModeChange,
@@ -102,6 +103,7 @@ const MemoEditorImpl: React.FC<MemoEditorProps> = ({
     defaultVisibility,
     defaultCreateTime,
     defaultLocation,
+    defaultRelations,
   });
   const draftBaseRevision = memo?.updateTime ? `${memo.updateTime.seconds}:${memo.updateTime.nanos}` : undefined;
 

@@ -1,3 +1,4 @@
+import { create } from "@bufbuild/protobuf";
 import {
   type ComponentType,
   forwardRef,
@@ -18,9 +19,11 @@ import { loadMemoEditor } from "@/components/MemoEditor/loader";
 import type { MemoEditorProps } from "@/components/MemoEditor/types";
 import { useAuth } from "@/contexts/AuthContext";
 import useCurrentUser from "@/hooks/useCurrentUser";
+import { useEchoBridgeStatus } from "@/hooks/useEchoBridge";
 import { isMemoBlurred } from "@/lib/tag";
 import { cn } from "@/lib/utils";
 import { State } from "@/types/proto/api/v1/common_pb";
+import { MemoRelation_MemoSchema, MemoRelation_Type, MemoRelationSchema } from "@/types/proto/api/v1/memo_service_pb";
 import { lazyWithReload } from "@/utils/lazy";
 import { canManageMemo } from "@/utils/user";
 import { MemoBody, MemoCommentListView, MemoHeader } from "./components";
@@ -47,10 +50,12 @@ const MemoView = forwardRef<MemoViewHandle, MemoViewProps>((props, ref) => {
   } = props;
   const cardRef = useRef<HTMLDivElement>(null);
   const [showEditor, setShowEditor] = useState(false);
+  const [continuationMode, setContinuationMode] = useState(false);
   const [EditorComponent, setEditorComponent] = useState<ComponentType<MemoEditorProps>>();
   const [cardWidth, setCardWidth] = useState(0);
 
   const currentUser = useCurrentUser();
+  const { data: echoBridge } = useEchoBridgeStatus();
   const { userTagsSetting } = useAuth();
   const creator = useResolvedUser(memoData.creator, { enabled: Boolean(showCreator || props.shareImageDialogOpen) });
   const isArchived = memoData.state === State.ARCHIVED;
@@ -85,11 +90,31 @@ const MemoView = forwardRef<MemoViewHandle, MemoViewProps>((props, ref) => {
     void loadMemoEditor()
       .then(({ default: MemoEditor }) => {
         setEditorComponent(() => MemoEditor);
+        // Until bridge capability resolves, prefer the non-destructive create path.
+        // A fast double-click must never overwrite a delivered memo merely because
+        // the status request is still in flight.
+        setContinuationMode(!memoData.parent && echoBridge?.enabled !== false);
         setShowEditor(true);
       })
       .catch(() => undefined);
-  }, [EditorComponent, focusMountedEditor, showEditor]);
-  const closeEditor = useCallback(() => setShowEditor(false), []);
+  }, [EditorComponent, echoBridge?.enabled, focusMountedEditor, memoData.parent, showEditor]);
+  const closeEditor = useCallback(() => {
+    setShowEditor(false);
+    setContinuationMode(false);
+  }, []);
+
+  const continuationRelations = useMemo(
+    () =>
+      continuationMode
+        ? [
+            create(MemoRelationSchema, {
+              type: MemoRelation_Type.REFERENCE,
+              relatedMemo: create(MemoRelation_MemoSchema, { name: memoData.name, snippet: memoData.snippet }),
+            }),
+          ]
+        : undefined,
+    [continuationMode, memoData.name, memoData.snippet],
+  );
 
   // The grid keys tiles by memo name (see getMemoKey), so the focused editor
   // identifies its own tile by name and untraps it for the duration.
@@ -233,9 +258,11 @@ const MemoView = forwardRef<MemoViewHandle, MemoViewProps>((props, ref) => {
           <EditorComponent
             autoFocus
             className="mb-2"
-            cacheKey={`inline-memo-editor-${memoData.name}`}
-            memo={memoData}
-            parentMemoName={memoData.parent || undefined}
+            cacheKey={`${continuationMode ? "continuation" : "inline-memo-editor"}-${memoData.name}`}
+            memo={continuationMode ? undefined : memoData}
+            parentMemoName={continuationMode ? undefined : memoData.parent || undefined}
+            defaultRelations={continuationRelations}
+            placeholder={continuationMode ? "续写这条笔记…" : undefined}
             onConfirm={closeEditor}
             onCancel={closeEditor}
             onFocusModeChange={handleFocusModeChange}

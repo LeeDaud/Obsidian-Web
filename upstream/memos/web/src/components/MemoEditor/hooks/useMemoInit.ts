@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Location, Memo, Visibility } from "@/types/proto/api/v1/memo_service_pb";
+import type { Location, Memo, MemoRelation, Visibility } from "@/types/proto/api/v1/memo_service_pb";
 import { cacheService, memoService } from "../services";
 import { useEditorContext } from "../state";
 import type { EditorController } from "../types/editorController";
@@ -13,6 +13,7 @@ interface UseMemoInitOptions {
   defaultVisibility?: Visibility;
   defaultCreateTime?: Date;
   defaultLocation?: Location;
+  defaultRelations?: MemoRelation[];
 }
 
 export const useMemoInit = ({
@@ -24,6 +25,7 @@ export const useMemoInit = ({
   defaultVisibility,
   defaultCreateTime,
   defaultLocation,
+  defaultRelations,
 }: UseMemoInitOptions) => {
   const { actions, dispatch } = useEditorContext();
   const initializedRef = useRef(false);
@@ -54,6 +56,9 @@ export const useMemoInit = ({
         dispatch(actions.setMetadata({ attachments: cachedDraft.attachments }));
       }
       dispatch(actions.setMetadata({ location: cachedDraft.location === null ? undefined : (cachedDraft.location ?? defaultLocation) }));
+      if (defaultRelations?.length) {
+        dispatch(actions.setMetadata({ relations: defaultRelations }));
+      }
       if (defaultVisibility !== undefined) {
         dispatch(actions.setMetadata({ visibility: defaultVisibility }));
       }
@@ -81,7 +86,19 @@ export const useMemoInit = ({
         clearTimeout(restoreCursorTimer);
       }
     };
-  }, [memo, cacheKey, username, autoFocus, defaultVisibility, defaultCreateTime, defaultLocation, actions, dispatch, editorRef]);
+  }, [
+    memo,
+    cacheKey,
+    username,
+    autoFocus,
+    defaultVisibility,
+    defaultCreateTime,
+    defaultLocation,
+    defaultRelations,
+    actions,
+    dispatch,
+    editorRef,
+  ]);
 
   return { isInitialized };
 };

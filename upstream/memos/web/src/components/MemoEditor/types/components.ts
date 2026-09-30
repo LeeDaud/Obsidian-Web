@@ -1,5 +1,5 @@
 import type { Attachment } from "@/types/proto/api/v1/attachment_service_pb";
-import type { Location, Memo, Visibility } from "@/types/proto/api/v1/memo_service_pb";
+import type { Location, Memo, MemoRelation, Visibility } from "@/types/proto/api/v1/memo_service_pb";
 import type { EditorFileOrigin } from "../Editor/extensions";
 import type { AudioRecorderStatus } from "../hooks/useAudioRecorder";
 import type { LocalFile } from "./attachment";
@@ -15,6 +15,8 @@ export interface MemoEditorProps {
   defaultSpace?: string;
   /** Seeds a new memo once; restored draft metadata takes precedence. */
   defaultLocation?: Location;
+  /** Relations seeded for a newly created memo, such as a continuation parent. */
+  defaultRelations?: MemoRelation[];
   /** A callback can decide whether focus is still appropriate after draft restoration. */
   autoFocus?: boolean | (() => boolean);
   /**

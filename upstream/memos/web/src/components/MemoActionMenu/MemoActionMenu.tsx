@@ -89,7 +89,7 @@ const MemoActionMenu = (props: MemoActionMenuProps) => {
             )}
             <DropdownMenuItem onClick={handleEditMemoClick}>
               <Edit3Icon />
-              {t("common.edit")}
+              {echoBridge?.enabled && !isComment ? "续写" : t("common.edit")}
             </DropdownMenuItem>
             {echoBridge?.enabled && !isComment && (
               <DropdownMenuItem

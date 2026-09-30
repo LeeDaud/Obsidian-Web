@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { AppError, digest } from '../model';
 import { Mutex } from '../store';
-import { validateBundle, type BundleAttempt, type BundleDelivery, type BundleRemote } from './bundle';
+import { bundleFile, validateBundle, type BundleAttempt, type BundleDelivery, type BundleRemote } from './bundle';
 
 // Transport-independent internal queue. Callers must authenticate the owner and
 // allocate stable paths before enqueue; this is deliberately not an HTTP API.
@@ -11,6 +11,7 @@ export interface Submission {
   instance: string;
   owner: string;
   memo: string;
+  parent?: { memo: string };
   delivery: BundleDelivery;
 }
 export interface SubmissionRecord extends Submission {
@@ -28,11 +29,19 @@ function identity(input: Submission): void {
   for (const value of [input.instance, input.owner, input.memo]) {
     if (typeof value !== 'string' || !value.trim() || value.length > 256) throw new AppError(400, 'INVALID_SUBMISSION', '来源标识无效。');
   }
+  if (input.parent !== undefined && (typeof input.parent.memo !== 'string' || !/^memos\/[a-zA-Z0-9-]{1,80}$/.test(input.parent.memo))) {
+    throw new AppError(400, 'INVALID_SUBMISSION', '父笔记标识无效。');
+  }
+  if (input.parent?.memo === input.memo) throw new AppError(400, 'INVALID_SUBMISSION', '笔记不能续写自身。');
   validateBundle(input.delivery);
 }
 function fingerprint(input: Submission): string {
-  return digest(JSON.stringify([sourceKey(input), input.delivery.revision,
-    input.delivery.files.map(f => [f.path, f.sha256]).sort((a, b) => a[0].localeCompare(b[0]))]));
+  const files = input.delivery.files.map(f => [f.path, f.sha256]).sort((a, b) => a[0].localeCompare(b[0]));
+  // Preserve the exact v1 fingerprint for existing records. Continuations add
+  // their parent to the digest without forcing a queue migration.
+  return digest(JSON.stringify(input.parent
+    ? [sourceKey(input), input.parent.memo, input.delivery.revision, files]
+    : [sourceKey(input), input.delivery.revision, files]));
 }
 const isMarkdownPath = (value: string) => /^(?:00_Inbox|Memos)\/\d{8}-\d{6}\.md$/.test(value);
 const normalizeMarkdownPath = (value: string) => {
@@ -40,6 +49,18 @@ const normalizeMarkdownPath = (value: string) => {
   return legacy ? `00_Inbox/${legacy[1]}` : value;
 };
 function markdownPath(input: Submission): string { return input.delivery.files.find(file => isMarkdownPath(file.path))!.path; }
+function continuationDelivery(record: SubmissionRecord, parent: SubmissionRecord): BundleDelivery {
+  const parentName = path.posix.basename(markdownPath(parent), '.md');
+  const link = `\n\n---\n续写自：[[${parentName}]]`;
+  const delivery = structuredClone(record.delivery);
+  delivery.files = delivery.files.map(file => {
+    if (!isMarkdownPath(file.path)) return file;
+    const content = Buffer.from(file.base64, 'base64').toString('utf8');
+    return bundleFile(file.path, Buffer.from(content + link), file.expectedBlob);
+  });
+  validateBundle(delivery);
+  return delivery;
+}
 function nextMarkdownPath(value: string): string {
   const match = /^00_Inbox\/(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})\.md$/.exec(value);
   if (!match) throw new AppError(400, 'INVALID_BUNDLE', '正文路径格式无效。');
@@ -145,9 +166,14 @@ export class SubmissionQueue {
   }
   async status(identity: Pick<Submission, 'instance' | 'owner' | 'memo'>, submissionId: string) {
     return this.mutex.run(async () => {
-      const record = (await this.records()).find(item => item.instance === identity.instance && item.owner === identity.owner &&
+      const all = await this.records();
+      const record = all.find(item => item.instance === identity.instance && item.owner === identity.owner &&
         item.memo === identity.memo && item.delivery.submissionId === submissionId);
-      return record && { state: record.state, revision: record.delivery.revision, error: record.error ?? null, commit: record.receipt?.commit };
+      if (!record) return undefined;
+      const parent = record.parent && all.find(item => item.instance === record.instance && item.owner === record.owner &&
+        item.memo === record.parent!.memo && item.state === 'verified');
+      const state = record.state === 'pending' && record.parent && !parent ? 'waiting_parent' : record.state;
+      return { state, revision: record.delivery.revision, error: record.error ?? null, commit: record.receipt?.commit };
     });
   }
   async deliver(remote: BundleRemote, options: { enabled: boolean; now?: number }): Promise<void> {
@@ -158,6 +184,9 @@ export class SubmissionQueue {
       const all = (await this.records()).sort((a, b) => a.delivery.revision - b.delivery.revision);
       for (const record of all) {
         if (record.state !== 'pending' || record.retryAt > now) continue;
+        const parent = record.parent && all.find(item => item.instance === record.instance && item.owner === record.owner &&
+          item.memo === record.parent!.memo && item.state === 'verified');
+        if (record.parent && !parent) continue;
         const prior = all.filter(item => sourceKey(item) === sourceKey(record) && item.delivery.revision < record.delivery.revision);
         if (prior.some(item => item.state !== 'verified')) continue;
         if (!record.delivery.attempt) {
@@ -165,7 +194,8 @@ export class SubmissionQueue {
           record.delivery.files = record.delivery.files.map(file => ({ ...file, expectedBlob: expected[file.path] }));
         }
         try {
-          const receipt = await remote.publishBundle(record.delivery, async attempt => {
+          const delivery = parent ? continuationDelivery(record, parent) : record.delivery;
+          const receipt = await remote.publishBundle(delivery, async attempt => {
             record.delivery.attempt = structuredClone(attempt); await this.write(record);
           });
           record.receipt = receipt; record.state = 'verified'; delete record.error; record.retryAt = 0;

@@ -44,6 +44,9 @@ type echoSubmission struct {
 	Instance string `json:"instance"`
 	Owner    string `json:"owner"`
 	Memo     string `json:"memo"`
+	Parent   *struct {
+		Memo string `json:"memo"`
+	} `json:"parent,omitempty"`
 	Delivery struct {
 		SubmissionID string           `json:"submissionId"`
 		Revision     int64            `json:"revision"`
@@ -125,6 +128,25 @@ func (s *echoBridgeService) submitMemo(ctx context.Context, userID int32, memoUI
 	if memo.CreatorID != userID {
 		return nil, errors.New("memo owner required")
 	}
+	referenceType := store.MemoRelationReference
+	relations, err := s.store.ListMemoRelations(ctx, &store.FindMemoRelation{MemoID: &memo.ID, Type: &referenceType})
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to load memo relations")
+	}
+	if len(relations) > 1 {
+		return nil, errors.New("Echo continuation supports exactly one parent memo")
+	}
+	parentUID := ""
+	if len(relations) == 1 {
+		parent, err := s.store.GetMemo(ctx, &store.FindMemo{ID: &relations[0].RelatedMemoID})
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to load continuation parent")
+		}
+		if parent == nil || parent.CreatorID != userID {
+			return nil, errors.New("continuation parent owner required")
+		}
+		parentUID = parent.UID
+	}
 	attachments, err := s.store.ListAttachments(ctx, &store.FindAttachment{MemoID: &memo.ID})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load memo attachments")
@@ -140,7 +162,7 @@ func (s *echoBridgeService) submitMemo(ctx context.Context, userID int32, memoUI
 		}
 		files = append(files, echoAttachment{UID: attachment.UID, Filename: attachment.Filename, Type: attachment.Type, Blob: blob})
 	}
-	submission, err := buildEchoSubmission(s.profile.InstanceURL, userID, memo, files)
+	submission, err := buildEchoSubmission(s.profile.InstanceURL, userID, memo, files, parentUID)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +235,7 @@ func safeAttachmentExtension(filename, mediaType string) (string, error) {
 	return extension, nil
 }
 
-func buildEchoSubmission(instance string, userID int32, memo *store.Memo, attachments []echoAttachment) (*echoSubmission, error) {
+func buildEchoSubmission(instance string, userID int32, memo *store.Memo, attachments []echoAttachment, parentUID ...string) (*echoSubmission, error) {
 	contentText := memo.Content
 	if len(strings.TrimSpace(memo.Content)) == 0 {
 		return nil, errors.New("empty memo cannot be submitted")
@@ -228,6 +250,11 @@ func buildEchoSubmission(instance string, userID int32, memo *store.Memo, attach
 		return nil, errors.New("memo version is invalid")
 	}
 	submission := &echoSubmission{Instance: instance, Owner: fmt.Sprintf("users/%d", userID), Memo: "memos/" + memo.UID}
+	if len(parentUID) > 0 && parentUID[0] != "" {
+		submission.Parent = &struct {
+			Memo string `json:"memo"`
+		}{Memo: "memos/" + parentUID[0]}
+	}
 	submission.Delivery.Revision = revision
 	for _, attachment := range attachments {
 		digest := sha256.Sum256(attachment.Blob)

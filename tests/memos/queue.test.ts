@@ -56,6 +56,42 @@ describe('explicit Memos submission queue', () => {
       expect((await queue.enqueue(second)).delivery.files[0].path).toBe('00_Inbox/20260928-120001.md');
     } finally { await queue.close(); }
   });
+  it('waits for the verified parent and publishes a continuation link without changing the parent', async () => {
+    const { queue, fake, remote } = await fixture();
+    const parent = input();
+    const child = input();
+    child.memo = 'memos/child';
+    child.parent = { memo: parent.memo };
+    child.delivery.submissionId = 'submit-child';
+    child.delivery.revision = 2;
+    child.delivery.files[0] = bundleFile('00_Inbox/20260928-120001.md', Buffer.from('续写内容'));
+    try {
+      await queue.enqueue(child);
+      expect(await queue.status(child, 'submit-child')).toMatchObject({ state: 'waiting_parent' });
+      await queue.deliver(remote, { enabled: true });
+      expect(fake.updates).toBe(0);
+
+      await queue.enqueue(parent);
+      await queue.deliver(remote, { enabled: true });
+      expect(await queue.status(child, 'submit-child')).toMatchObject({ state: 'verified' });
+      const tree = fake.trees.get(fake.commits.get(fake.head)!.tree.sha)!;
+      const read = (name: string) => {
+        const blob = tree[name];
+        return fake.blobs.get(blob) ?? fake.binaryBlobs.get(blob)?.toString('utf8');
+      };
+      expect(read('00_Inbox/20260928-120000.md')).toBe('合成笔记');
+      expect(read('00_Inbox/20260928-120001.md')).toBe('续写内容\n\n---\n续写自：[[20260928-120000]]');
+    } finally { await queue.close(); }
+  });
+  it('rejects forged or self-referencing parent identities', async () => {
+    const { queue } = await fixture();
+    try {
+      const forged = input(); forged.parent = { memo: '../outside' };
+      await expect(queue.enqueue(forged)).rejects.toMatchObject({ code: 'INVALID_SUBMISSION' });
+      const self = input(); self.parent = { memo: self.memo };
+      await expect(queue.enqueue(self)).rejects.toMatchObject({ code: 'INVALID_SUBMISSION' });
+    } finally { await queue.close(); }
+  });
   it('does no delivery while disabled and never exposes another owner’s status', async () => {
     const { queue, fake, remote } = await fixture();
     try {
