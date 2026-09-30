@@ -106,6 +106,12 @@ docker start echo-capture
 - `echo-memos` 与 `echo-capture` 均为 healthy；Caddy 和 Vaultwarden 未重建且继续正常。`memos.leedaud.xyz`、`echo.leedaud.xyz` 与 `bitwarden.leedaud.xyz` 均返回 200。
 - 未使用用户真实笔记执行写入测试；已登录手机实机仍需复核普通保存和续写两种操作栏状态。
 
+### 权限与附件按钮布局调整
+
+- 源码提交 `5a7277f` 已推送至 `main`；编辑器暂时隐藏权限选择器，现有私有权限值及后端权限逻辑不变。
+- 手机端操作顺序调整为“暂存｜附件｜保存”；续写时取消仍独占上一行。
+- Memos 运行镜像更新为 `sha256:5b018cd9e2594d634b4ae7331326897f4704570d08215d13f781eff089160de3`；`echo-memos` 与 `echo-capture` 均为 healthy，Memos、Echo 与 Vaultwarden 公网入口均返回 200。
+
 ## 2026-09-21 手动上传版本
 
 - 已部署镜像 `sha256:7797f53f1bbdb5c31830dc8f78593d8afa44c76fa14dd937d2ca0925dbdb85a9`；`echo-capture`、Caddy 与 Vaultwarden 均健康，两个公网入口返回 200。
