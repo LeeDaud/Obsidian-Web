@@ -77,6 +77,8 @@ export interface EditorToolbarProps {
   onAudioRecorderClick: () => void;
   viewToggles?: EditorViewToggles;
   onInsertImages: (files: File[]) => void;
+  /** Top-level memo mode; comments retain their existing continuation flow. */
+  showKindToggle?: boolean;
 }
 
 export interface EditorMetadataProps {

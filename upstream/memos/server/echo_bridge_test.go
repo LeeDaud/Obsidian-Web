@@ -50,6 +50,24 @@ func TestBuildEchoSubmission(t *testing.T) {
 	require.Equal(t, "中文记录", string(decoded))
 }
 
+func TestBuildEchoSubmissionAddsTodoMetadata(t *testing.T) {
+	memo := &store.Memo{UID: "todo-uid", CreatedTs: 1789992000, UpdatedTs: 1789992061, Content: "- [ ] 联系设计师\n  补充说明"}
+	submission, err := buildEchoSubmission("https://memos.example.com", 7, memo, nil)
+	require.NoError(t, err)
+	decoded, err := base64.StdEncoding.DecodeString(submission.Delivery.Files[0].Base64)
+	require.NoError(t, err)
+	require.Equal(t, "---\ntype: todo\nstatus: open\ncreated: 2026-09-21 20:00\nsource: memos\n---\n\n- [ ] 联系设计师\n  补充说明", string(decoded))
+}
+
+func TestBuildEchoSubmissionMarksCompletedTodo(t *testing.T) {
+	memo := &store.Memo{UID: "todo-uid", CreatedTs: 1789992000, UpdatedTs: 1789992061, Content: "- [x] 已完成"}
+	submission, err := buildEchoSubmission("https://memos.example.com", 7, memo, nil)
+	require.NoError(t, err)
+	decoded, err := base64.StdEncoding.DecodeString(submission.Delivery.Files[0].Base64)
+	require.NoError(t, err)
+	require.Contains(t, string(decoded), "status: done")
+}
+
 func TestBuildEchoSubmissionIncludesContinuationParent(t *testing.T) {
 	memo := &store.Memo{UID: "child-uid", CreatedTs: 1789992000, UpdatedTs: 1789992061, Content: "续写内容"}
 	submission, err := buildEchoSubmission("https://memos.example.com", 7, memo, nil, "parent-uid")

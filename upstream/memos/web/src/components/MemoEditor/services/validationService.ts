@@ -1,6 +1,7 @@
 import type { Translations } from "@/utils/i18n";
 import { findInvalidManagedAttachmentReferences } from "@/utils/managed-attachment";
 import type { EditorState } from "../state";
+import { hasTodoBody, isTodoContent } from "../utils/todoMode";
 
 export interface ValidationResult {
   valid: boolean;
@@ -17,6 +18,15 @@ export const validationService = {
 
     // Must have content, attachment, or local file
     if (!state.content.trim() && state.metadata.attachments.length === 0 && state.localFiles.length === 0) {
+      return { valid: false, reason: "editor.validation.content-required" };
+    }
+
+    if (
+      isTodoContent(state.content) &&
+      !hasTodoBody(state.content) &&
+      state.metadata.attachments.length === 0 &&
+      state.localFiles.length === 0
+    ) {
       return { valid: false, reason: "editor.validation.content-required" };
     }
 

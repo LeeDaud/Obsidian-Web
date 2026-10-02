@@ -255,6 +255,14 @@ func buildEchoSubmission(instance string, userID int32, memo *store.Memo, attach
 	}
 	zone := time.FixedZone("Asia/Shanghai", 8*60*60)
 	created := time.Unix(memo.CreatedTs, 0).In(zone)
+	trimmedContent := strings.TrimLeft(contentText, " \t\r\n")
+	if strings.HasPrefix(trimmedContent, "- [ ] ") || strings.HasPrefix(trimmedContent, "- [x] ") || strings.HasPrefix(trimmedContent, "- [X] ") {
+		status := "open"
+		if strings.HasPrefix(trimmedContent, "- [x] ") || strings.HasPrefix(trimmedContent, "- [X] ") {
+			status = "done"
+		}
+		contentText = fmt.Sprintf("---\ntype: todo\nstatus: %s\ncreated: %s\nsource: memos\n---\n\n%s", status, created.Format("2006-01-02 15:04"), contentText)
+	}
 	revision := memo.UpdatedTs
 	if revision < 1 {
 		revision = memo.CreatedTs
