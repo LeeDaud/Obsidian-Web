@@ -144,3 +144,9 @@ docker start echo-capture
 - 活动保护期后，该合成记录为 `retired=true`、`contentPresent=false`、`deliveryPresent=false`；服务器正文和投递载荷已回收，GitHub 与电脑副本保留。
 - 本机生产 Chromium 两次在导航阶段因跨境线路超时，未完成可视化断言；服务器健康检查、HTTP 响应、GitHub 内容和电脑落盘均通过。
 
+## 2026-10-02 Memos 待办入口部署
+
+- 源码提交 `5dec341` 已推送至 `main`。顶层编辑器增加“笔记 / 待办”入口，待办以标准 Markdown checkbox 保存并自动投递；bridge 为导出文件添加 todo YAML 元数据。
+- Memos 使用 Node 24.14 和 Go 1.27 构建完成，运行镜像为 `sha256:4f9cbf85d84f7718aa8a0bc931158713c4081d715a9f9bcafa1a55b90759c8ee`。
+- `echo-memos` 与 `echo-capture` 均为 healthy；Caddy 与 Vaultwarden 保持运行。Memos、Echo 与 Vaultwarden 正式 HTTPS 入口均返回 200。
+- 本轮未创建真实待办或 GitHub 内容；数据格式由前端、bridge 单元测试及生产镜像编译验证。
