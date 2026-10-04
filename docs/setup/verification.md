@@ -185,3 +185,16 @@ CI/CD、生产部署、HTTPS、服务器系统服务均未新增或启用。Obsi
 - 公网 HTML 引用 `/assets/index-BSGOe1Rg.js`，实际懒加载 `/assets/MemoView-CnvCjECo.js` 包含 `memo-delivery-status` 控件及 `/api/echo/v1/memo-statuses` 查询逻辑；bridge 能力接口返回 enabled=true。
 - 构建期间 SSH 连接曾中断；重连检查确认两个最终镜像均带 `76e66b3` 标签并构建完成后才切换服务。旧 Echo 镜像底层文件缺失，已通过旧容器源码重建回滚版本，未将数据或 secrets 纳入镜像。
 - 默认 Playwright 浏览器版本未安装；改用本机已安装 Chrome 进行公网原版页面检查，不安装全局工具。页面登录初始化、用户设置和列表 API 曾返回 200，页面异常和创建/更新请求均为 0；但跨境导航、资源加载与状态标签等待发生超时，未完成原版页面状态显示断言，不能宣称完整手机端验收通过。保留本地控件的 320/390/430px 合成验证，真机使用仍待验收。
+
+## 2026-10-05 状态位置、编辑方式与模式选择
+
+- 用户确认实施后补充“投递中”。主标签为已保存 / 投递中 / 已投递，状态移至时间戳右侧，详情复用原生 Popover；队列 pending/waiting_parent 且无错误时表示投递过程尚未完成，非 worker 实时执行标记。失败、断网、旧版本等说明保留在详情。正文下方不再重复展示状态。
+- MemoView 与 Header/三点菜单共享同一版本查询；查询尚未完成时不提供投递菜单，已投递隐藏“投递到 Obsidian”。显式提交成功立即刷新对应 memo，正常投递中每 5 秒查询、错误/未知每 30 秒，成功/冲突停止持续轮询；仍仅可见卡片自动查询，隐藏页面停止后台轮询。
+- 双击已保存笔记使用原 memo 和 inline 草稿键；投递中及已投递使用新 memo 和 continuation 草稿键，REFERENCE 关联原笔记。打开前重新只读核验，失败时不打开；并发双击合并为一次核验，不触发提交或上传。原版评论编辑保留。
+- 笔记 / 待办选择器为整行两列等宽，按钮至少 44px；时间戳过长可截断，状态和右侧操作保留。
+- `node node_modules/typescript/bin/tsc --noEmit --skipLibCheck`、`node node_modules/@biomejs/biome/bin/biome check src tests` 通过（679 文件）；Vite 生产构建通过，既有 CSS、chunk 和插件耗时警告保留。
+- 最终四组前端测试 `memo-delivery-status`、`memo-action-menu`、`echo-delivery-query`、`memo-delivery-edit`：36 项通过，覆盖菜单、当前/旧版本、原 memo 编辑和关联续写、并发双击、错误保护，以及显式提交后的已保存→投递中→已投递和只提交一次。
+- 全量 Vitest 1552/1559 通过；仍是此前的 7 项旧断言失败（memo-header-navigation 4 项，use-auto-save 3 项）。未改服务器接口、数据库、凭据、CI/CD 或真实笔记内容，本轮未使用 Go/Echo 服务端检查代替前端验证。
+- ss-review：Pass（仅新增控件）。复用原生 Button/Popover、语义颜色、13px 中文、焦点和 aria-pressed；状态触控区域与模式按钮至少 44px。保留原生三点/反应图标样式，没有将新增控件规范扩展为全站重绘。
+- 临时预览加载真实 MemoDeliveryStatus 组件和 Memos CSS，模式选择部分直接取本轮 EditorToolbar 的 JSX，时间戳布局采用相同 flex 类。320/390/430px 均无横向溢出，模式等宽占满一行，切换 aria-pressed 正常，状态详情展开无溢出，查看状态产生 0 次提交。该预览不是完整原版登录/编辑端到端或真机验收。
+- 合成截图位于 `C:/Users/10159/.codex/visualizations/2026/10/04/01a106fd-68c4-7282-8b69-306777720036/memos-status-adjustment-{320,390,430}.png`；临时 harness 与日志在系统临时目录，预览服务已停止。

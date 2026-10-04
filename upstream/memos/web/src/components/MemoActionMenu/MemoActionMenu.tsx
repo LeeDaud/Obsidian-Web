@@ -89,9 +89,11 @@ const MemoActionMenu = (props: MemoActionMenuProps) => {
             )}
             <DropdownMenuItem onClick={handleEditMemoClick}>
               <Edit3Icon />
-              {echoBridge?.enabled && !isComment ? "续写" : t("common.edit")}
+              {echoBridge?.enabled && !isComment && (props.deliveryState === "已投递" || props.deliveryState === "投递中")
+                ? "续写"
+                : t("common.edit")}
             </DropdownMenuItem>
-            {echoBridge?.enabled && !isComment && (
+            {echoBridge?.enabled && !isComment && props.deliveryState !== "已投递" && !props.deliveryChecking && (
               <DropdownMenuItem
                 disabled={submitToEcho.isPending}
                 onClick={() => {

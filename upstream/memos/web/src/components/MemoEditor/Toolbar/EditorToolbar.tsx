@@ -102,11 +102,11 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
   return (
     <div className="flex w-full min-w-0 flex-col gap-2">
       {showKindToggle && (
-        <div className="inline-flex self-start rounded-lg border border-border/70 p-0.5" role="group" aria-label="记录类型">
+        <div className="grid w-full grid-cols-2 rounded-lg border border-border/70 p-0.5" role="group" aria-label="记录类型">
           <Button
             variant="ghost"
             size="sm"
-            className={cn("h-8 px-3 touch-target-coarse", !isTodo && "bg-muted")}
+            className={cn("min-h-11 w-full px-3", !isTodo && "bg-muted")}
             aria-pressed={!isTodo}
             onClick={() => handleKindChange(false)}
           >
@@ -115,7 +115,7 @@ export const EditorToolbar: FC<EditorToolbarProps> = ({
           <Button
             variant="ghost"
             size="sm"
-            className={cn("h-8 px-3 touch-target-coarse", isTodo && "bg-muted")}
+            className={cn("min-h-11 w-full px-3", isTodo && "bg-muted")}
             aria-pressed={isTodo}
             onClick={() => handleKindChange(true)}
           >

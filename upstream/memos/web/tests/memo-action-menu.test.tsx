@@ -6,6 +6,7 @@ import { State } from "@/types/proto/api/v1/common_pb";
 import { MemoSchema } from "@/types/proto/api/v1/memo_service_pb";
 
 const handlers = vi.hoisted(() => ({
+  bridgeEnabled: false,
   canMove: true,
   handleTogglePinMemoBtnClick: vi.fn(),
   handleEditMemoClick: vi.fn(),
@@ -31,7 +32,7 @@ vi.mock("@/components/MemoActionMenu/hooks", () => ({
 }));
 
 vi.mock("@/hooks/useEchoBridge", () => ({
-  useEchoBridgeStatus: () => ({ data: { enabled: false } }),
+  useEchoBridgeStatus: () => ({ data: { enabled: handlers.bridgeEnabled } }),
   useSubmitMemoToEcho: () => ({ isPending: false, mutate: vi.fn() }),
 }));
 
@@ -43,6 +44,15 @@ describe("MemoActionMenu", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     handlers.canMove = true;
+    handlers.bridgeEnabled = false;
+  });
+
+  it.each(["已保存", "投递中", "已投递"])("matches actions to %s", async (deliveryState) => {
+    handlers.bridgeEnabled = true;
+    render(<MemoActionMenu memo={create(MemoSchema, { name: "memos/1", state: State.NORMAL })} deliveryState={deliveryState} />);
+    fireEvent.click(screen.getByRole("button", { name: "common.more" }));
+    expect(await screen.findByRole("menuitem", { name: deliveryState === "已保存" ? "common.edit" : "续写" })).toBeInTheDocument();
+    expect(Boolean(screen.queryByRole("menuitem", { name: "投递到 Obsidian" }))).toBe(deliveryState !== "已投递");
   });
 
   it.each(["move", "delete"])("places %s inside More while keeping frequent actions in the main menu", async (action) => {

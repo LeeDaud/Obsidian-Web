@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { getRequestToken } from "@/connect";
+import type { Memo } from "@/types/proto/api/v1/memo_service_pb";
 
 interface EchoStatus {
   enabled: boolean;
@@ -92,7 +93,11 @@ export function useMemoDeliveryStatus(
     },
     staleTime: 30_000,
     retry: false,
-    refetchInterval: (query) => (query.state.data?.state === "verified" || query.state.data?.state === "conflict" ? false : 30_000),
+    refetchInterval: (query) => {
+      const status = query.state.data;
+      if (status?.state === "verified" || status?.state === "conflict") return false;
+      return (status?.state === "pending" || status?.state === "waiting_parent") && !status.error ? 5_000 : 30_000;
+    },
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: "always",
   });
@@ -117,6 +122,7 @@ export function useEchoBridgeStatus() {
 }
 
 export function useSubmitMemoToEcho() {
+  const queryClient = useQueryClient();
   const [isPending, setPending] = useState(false);
   const mutate = useCallback(
     async (memoName: string, callbacks: { onSuccess: (status: EchoSubmissionStatus) => void; onError: (error: Error) => void }) => {
@@ -134,13 +140,39 @@ export function useSubmitMemoToEcho() {
         });
         if (!response.ok) throw await responseError(response);
         callbacks.onSuccess((await response.json()) as EchoSubmissionStatus);
+        void queryClient.invalidateQueries({
+          queryKey: ["echo-memo-status"],
+          predicate: (query) => query.queryKey[2] === memoName,
+        });
       } catch (error) {
         callbacks.onError(error instanceof Error ? error : new Error("Echo request failed"));
       } finally {
         setPending(false);
       }
     },
-    [isPending],
+    [isPending, queryClient],
   );
   return { isPending, mutate };
+}
+
+export function memoDeliveryLabel(status: MemoDeliveryStatus | undefined, revision: number): string {
+  if (status?.revision !== revision) return "已保存";
+  if (status.state === "verified") return "已投递";
+  if ((status.state === "pending" || status.state === "waiting_parent") && !status.error) return "投递中";
+  return "已保存";
+}
+
+export function useSavedMemoDeliveryStatus(memo: Memo, owner: string, enabled: boolean) {
+  const revision = Number(memo.updateTime?.seconds || memo.createTime?.seconds || 0);
+  return useMemoDeliveryStatus(
+    owner,
+    memo.name,
+    `${revision}:${memo.updateTime?.nanos ?? 0}`,
+    memo.content,
+    memo.attachments
+      .map((item) => item.name)
+      .sort()
+      .join("\n"),
+    enabled,
+  );
 }

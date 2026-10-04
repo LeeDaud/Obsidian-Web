@@ -2,6 +2,7 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { createContext, useContext } from "react";
 import { useLocation } from "react-router-dom";
 import { useView } from "@/contexts/ViewContext";
+import type { useSavedMemoDeliveryStatus } from "@/hooks/useEchoBridge";
 import type { Memo } from "@/types/proto/api/v1/memo_service_pb";
 import { MemoRelation_Type } from "@/types/proto/api/v1/memo_service_pb";
 import type { User } from "@/types/proto/api/v1/user_service_pb";
@@ -10,6 +11,9 @@ import { RELATIVE_TIME_THRESHOLD_MS } from "./constants";
 import { isMemoDetailPath } from "./navigation";
 
 export interface MemoViewContextValue {
+  deliveryQuery?: ReturnType<typeof useSavedMemoDeliveryStatus>;
+  deliveryState?: string;
+  deliveryEnabled?: boolean;
   memo: Memo;
   creator: User | undefined;
   currentUser: User | undefined;

@@ -18,6 +18,7 @@ import UserAvatar from "../../UserAvatar";
 import VisibilityIcon from "../../VisibilityIcon";
 import { MEMO_TIME_CONTROL_CLASSES } from "../constants";
 import { useMemoActions } from "../hooks";
+import { MemoDeliveryStatus } from "../MemoDeliveryStatus";
 import { useMemoViewContext, useMemoViewDerived } from "../MemoViewContext";
 import { createMemoNavigationState } from "../navigation";
 import type { MemoHeaderProps } from "../types";
@@ -29,7 +30,8 @@ const MEMO_HEADER_ACTION_CLASSES = cn(buttonVariants({ variant: "quiet", size: "
 const MemoHeader: React.FC<MemoHeaderProps> = ({ showCreator, showVisibility, showPinned, showSpace }) => {
   const t = useTranslate();
 
-  const { memo, creator, currentUser, parentPage, isArchived, readonly, openEditor } = useMemoViewContext();
+  const { memo, creator, currentUser, parentPage, isArchived, readonly, openEditor, deliveryQuery, deliveryState, deliveryEnabled } =
+    useMemoViewContext();
   const { createTime, updateTime, displayTime: memoDisplayTime, isDisplayingUpdatedTime } = useMemoViewDerived();
   const { newMemoName } = useNewMemo();
   const visibilityOption = getVisibilityOption(memo.visibility);
@@ -66,14 +68,14 @@ const MemoHeader: React.FC<MemoHeaderProps> = ({ showCreator, showVisibility, sh
   const spaceMetadata = showSpace && memo.space ? <MemoSpaceBadge spaceName={memo.space} /> : null;
 
   return (
-    // A fixed 24px row, the height of its action squares, so the card's top edge never
-    // moves with what the header happens to show.
-    <div className="flex h-6 w-full items-center justify-between gap-2">
+    // Leave room for the delivery trigger while retaining the original trailing actions.
+    <div className="flex min-h-11 w-full items-center justify-between gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        {/* The time stays visible while the creator and Space badge can shrink and truncate. */}
-        <div data-slot="memo-header-meta" className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+        {/* Long timestamps can truncate while the delivery state and actions stay visible. */}
+        <div data-slot="memo-header-meta" className="flex min-w-0 flex-1 items-center gap-1.5">
           {showCreator && creator && <CreatorDisplay creator={creator} />}
           <TimeDisplay displayTime={displayTime} timeTooltip={timeTooltip} onGotoDetail={handleGotoMemoDetailPage} />
+          {deliveryEnabled && currentUser && <MemoDeliveryStatus memo={memo} owner={currentUser.name} query={deliveryQuery} />}
           {spaceMetadata}
         </div>
         {memo.name === newMemoName && (
@@ -118,7 +120,14 @@ const MemoHeader: React.FC<MemoHeaderProps> = ({ showCreator, showVisibility, sh
           </TooltipProvider>
         )}
 
-        <MemoActionMenu memo={memo} parentPage={parentPage} readonly={readonly} onEdit={openEditor} />
+        <MemoActionMenu
+          memo={memo}
+          parentPage={parentPage}
+          readonly={readonly}
+          onEdit={openEditor}
+          deliveryState={deliveryState}
+          deliveryChecking={deliveryEnabled && deliveryQuery?.isPending}
+        />
       </div>
     </div>
   );
@@ -173,7 +182,7 @@ interface TimeDisplayProps {
 
 const TimeDisplay: React.FC<TimeDisplayProps> = ({ displayTime, timeTooltip, onGotoDetail }) => (
   <TimeTooltip content={timeTooltip}>
-    <button type="button" className={MEMO_TIME_CONTROL_CLASSES} onClick={onGotoDetail}>
+    <button type="button" className={cn(MEMO_TIME_CONTROL_CLASSES, "min-w-0 shrink truncate")} onClick={onGotoDetail}>
       {displayTime}
     </button>
   </TimeTooltip>

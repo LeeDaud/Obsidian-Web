@@ -1,9 +1,9 @@
 import { createHash, webcrypto } from "node:crypto";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { useMemoDeliveryStatus } from "@/hooks/useEchoBridge";
+import { memoDeliveryLabel, useMemoDeliveryStatus, useSubmitMemoToEcho } from "@/hooks/useEchoBridge";
 
 vi.mock("@/connect", () => ({ getRequestToken: async () => "user-access-token" }));
 const hash = createHash("sha256").update("saved").digest("hex");
@@ -66,4 +66,34 @@ it("reports a network failure as a query error without submitting", async () => 
   const { result } = renderHook(() => useMemoDeliveryStatus("users/1", "memos/one", "42:0", "saved", "", true), { wrapper });
   await waitFor(() => expect(result.current.isError).toBe(true));
   expect(fetch).toHaveBeenCalledOnce();
+});
+
+it("refreshes the same saved memo immediately after explicit submission and follows verification", async () => {
+  let state = "unknown";
+  let submissions = 0;
+  vi.mocked(fetch).mockImplementation(async (url) => {
+    if (String(url).endsWith("/submissions")) {
+      submissions++;
+      state = "pending";
+      return new Response(JSON.stringify({ state, revision: 42 }));
+    }
+    return new Response(JSON.stringify([{ ...receipt("memos/one"), state }]));
+  });
+  const { result } = renderHook(
+    () => ({
+      status: useMemoDeliveryStatus("users/1", "memos/one", "42:0", "saved", "", true),
+      submit: useSubmitMemoToEcho(),
+    }),
+    { wrapper },
+  );
+  await waitFor(() => expect(result.current.status.isSuccess).toBe(true));
+  expect(memoDeliveryLabel(result.current.status.data, 42)).toBe("已保存");
+  const success = vi.fn();
+  await act(() => result.current.submit.mutate("memos/one", { onSuccess: success, onError: vi.fn() }));
+  await waitFor(() => expect(memoDeliveryLabel(result.current.status.data, 42)).toBe("投递中"));
+  expect(success).toHaveBeenCalledOnce();
+  state = "verified";
+  await act(() => result.current.status.refetch());
+  await waitFor(() => expect(memoDeliveryLabel(result.current.status.data, 42)).toBe("已投递"));
+  expect(submissions).toBe(1);
 });

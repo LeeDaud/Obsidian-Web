@@ -12,6 +12,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { toast } from "react-hot-toast";
 import { useLocation } from "react-router-dom";
 import { useColumnGridUntrapped } from "@/components/ColumnGrid/ColumnGridContext";
 import { useResolvedUser } from "@/components/MemoContent/MentionResolutionContext";
@@ -19,7 +20,7 @@ import { loadMemoEditor } from "@/components/MemoEditor/loader";
 import type { MemoEditorProps } from "@/components/MemoEditor/types";
 import { useAuth } from "@/contexts/AuthContext";
 import useCurrentUser from "@/hooks/useCurrentUser";
-import { useEchoBridgeStatus } from "@/hooks/useEchoBridge";
+import { memoDeliveryLabel, useEchoBridgeStatus, useSavedMemoDeliveryStatus } from "@/hooks/useEchoBridge";
 import { isMemoBlurred } from "@/lib/tag";
 import { cn } from "@/lib/utils";
 import { State } from "@/types/proto/api/v1/common_pb";
@@ -29,7 +30,6 @@ import { canManageMemo } from "@/utils/user";
 import { MemoBody, MemoCommentListView, MemoHeader } from "./components";
 import { MEMO_CARD_BASE_CLASSES } from "./constants";
 import { useImagePreview } from "./hooks";
-import { MemoDeliveryStatus } from "./MemoDeliveryStatus";
 import { computeCommentAmount, MemoViewContext } from "./MemoViewContext";
 import { isMemoDetailPath, resolveMemoParentPage } from "./navigation";
 import type { MemoViewHandle, MemoViewProps } from "./types";
@@ -56,7 +56,27 @@ const MemoView = forwardRef<MemoViewHandle, MemoViewProps>((props, ref) => {
   const [cardWidth, setCardWidth] = useState(0);
 
   const currentUser = useCurrentUser();
-  const { data: echoBridge } = useEchoBridgeStatus();
+  const bridgeQuery = useEchoBridgeStatus();
+  const echoBridge = bridgeQuery.data;
+  const [visible, setVisible] = useState(false);
+  const openingEditor = useRef(false);
+  const deliveryQuery = useSavedMemoDeliveryStatus(
+    memoData,
+    currentUser?.name ?? "",
+    visible && memoData.creator === currentUser?.name && echoBridge?.enabled === true,
+  );
+  const deliveryRevision = Number(memoData.updateTime?.seconds || memoData.createTime?.seconds || 0);
+  const deliveryState = memoDeliveryLabel(deliveryQuery.data, deliveryRevision);
+  useEffect(() => {
+    const element = cardRef.current;
+    if (!element || typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [showEditor]);
   const { userTagsSetting } = useAuth();
   const creator = useResolvedUser(memoData.creator, { enabled: Boolean(showCreator || props.shareImageDialogOpen) });
   const isArchived = memoData.state === State.ARCHIVED;
@@ -88,17 +108,32 @@ const MemoView = forwardRef<MemoViewHandle, MemoViewProps>((props, ref) => {
       focusMountedEditor();
       return;
     }
-    void loadMemoEditor()
-      .then(({ default: MemoEditor }) => {
+    if (openingEditor.current) return;
+    openingEditor.current = true;
+    void (async () => {
+      try {
+        let continuation = false;
+        if (!memoData.parent) {
+          const capability = echoBridge ?? (await bridgeQuery.refetch()).data;
+          if (!capability) throw new Error("无法确认投递状态，请稍后重试。");
+          if (capability.enabled) {
+            const result = await deliveryQuery.refetch();
+            if (result.isError || !result.data) throw new Error("无法确认投递状态，请稍后重试。");
+            const label = memoDeliveryLabel(result.data, deliveryRevision);
+            continuation = label === "已投递" || label === "投递中";
+          }
+        }
+        const { default: MemoEditor } = await loadMemoEditor();
         setEditorComponent(() => MemoEditor);
-        // Until bridge capability resolves, prefer the non-destructive create path.
-        // A fast double-click must never overwrite a delivered memo merely because
-        // the status request is still in flight.
-        setContinuationMode(!memoData.parent && echoBridge?.enabled !== false);
+        setContinuationMode(continuation);
         setShowEditor(true);
-      })
-      .catch(() => undefined);
-  }, [EditorComponent, echoBridge?.enabled, focusMountedEditor, memoData.parent, showEditor]);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "无法打开编辑器，请稍后重试。");
+      } finally {
+        openingEditor.current = false;
+      }
+    })();
+  }, [EditorComponent, bridgeQuery, deliveryQuery, deliveryRevision, echoBridge, focusMountedEditor, memoData.parent, showEditor]);
   const closeEditor = useCallback(() => {
     setShowEditor(false);
     setContinuationMode(false);
@@ -179,6 +214,9 @@ const MemoView = forwardRef<MemoViewHandle, MemoViewProps>((props, ref) => {
 
   const contextValue = useMemo(
     () => ({
+      deliveryQuery,
+      deliveryState,
+      deliveryEnabled: memoData.creator === currentUser?.name && echoBridge?.enabled === true,
       memo: memoData,
       creator,
       currentUser,
@@ -193,6 +231,9 @@ const MemoView = forwardRef<MemoViewHandle, MemoViewProps>((props, ref) => {
       openPreview,
     }),
     [
+      deliveryQuery,
+      deliveryState,
+      echoBridge?.enabled,
       memoData,
       creator,
       currentUser,
@@ -223,10 +264,6 @@ const MemoView = forwardRef<MemoViewHandle, MemoViewProps>((props, ref) => {
       />
 
       <MemoBody compact={compact} />
-
-      {!readonly && echoBridge?.enabled && currentUser && (
-        <MemoDeliveryStatus memo={memoData} owner={currentUser.name} detail={isInMemoDetailPage} />
-      )}
 
       {previewState.items.length > 0 && (
         <Suspense fallback={null}>
