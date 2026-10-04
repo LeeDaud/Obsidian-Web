@@ -63,3 +63,19 @@ it('supports idempotent submit and owner-scoped status lookup', async () => {
   expect(await found.json()).toEqual({ state: 'pending', revision: 1, error: null });
   expect((await fetch(url + '/submit-1' + query.replace('users%2F1', 'users%2F2'), { headers })).status).toBe(404);
 });
+
+it('protects the read-only batch route and does not create a submission', async () => {
+  const { config, token } = await setup();
+  const url = config.origin + '/api/memos/internal/statuses';
+  const body = JSON.stringify({ instance: 'local', owner: 'users/1', queries: [
+    { memo: 'memos/1', submissionId: 'submit-1', attachmentHashes: [] },
+  ] });
+  const headers = { Host: new URL(config.origin).host, 'Content-Type': 'application/json' };
+  expect((await fetch(url, { method: 'POST', headers, body })).status).toBe(401);
+  const response = await fetch(url, { method: 'POST', headers: { ...headers, Authorization: `Bearer ${token}` }, body });
+  expect(await response.json()).toEqual([{ memo: 'memos/1', state: 'unknown' }]);
+  const query = '?instance=local&owner=users%2F1&memo=memos%2F1';
+  expect((await fetch(config.origin + '/api/memos/internal/submissions/submit-1' + query,
+    { headers: { ...headers, Authorization: `Bearer ${token}` } })).status).toBe(404);
+  expect((await fetch(url, { method: 'POST', headers: { ...headers, Authorization: `Bearer ${token}` }, body: '{}' })).status).toBe(400);
+});

@@ -29,6 +29,54 @@ async function fixture() {
   return { root, queue, fake, remote };
 }
 describe('explicit Memos submission queue', () => {
+  it('reports parent waiting and rejects a changed continuation relationship', async () => {
+    const { queue } = await fixture();
+    const child = input(); child.parent = { memo: 'memos/parent' };
+    try {
+      await queue.enqueue(child);
+      const lookup = { memo: child.memo, submissionId: child.delivery.submissionId, attachmentHashes: [], parentMemo: child.parent.memo };
+      expect((await queue.statuses('local', 'users/test', [lookup]))[0].state).toBe('waiting_parent');
+      expect((await queue.statuses('local', 'users/test', [{ ...lookup, parentMemo: 'memos/other' }]))[0].state).toBe('unknown');
+    } finally { await queue.close(); }
+  });
+  it('queries current receipts without enqueueing, scopes owners and preserves older verified versions', async () => {
+    const { queue, root, remote } = await fixture();
+    const first = input();
+    const query = (submissionId: string) => [{ memo: first.memo, submissionId, attachmentHashes: [] }];
+    try {
+      expect(await queue.statuses(first.instance, first.owner, query('missing'))).toEqual([{ memo: first.memo, state: 'unknown' }]);
+      expect(await readdir(root)).not.toContain('missing.json');
+      await queue.enqueue(first);
+      expect((await queue.statuses(first.instance, first.owner, query('submit-1')))[0]).toMatchObject({ state: 'pending', revision: 1 });
+      await queue.deliver(remote, { enabled: true });
+      const result = (await queue.statuses(first.instance, first.owner, query('submit-1')))[0];
+      expect(result).toMatchObject({ state: 'verified', path: '00_Inbox/20260928-120000.md' });
+      expect(result).toHaveProperty('commit');
+      expect(JSON.stringify(result)).not.toContain('合成笔记');
+      const before = await readdir(root);
+      expect((await queue.statuses(first.instance, 'users/other', query('submit-1')))[0].state).toBe('unknown');
+      const newer = (await queue.statuses(first.instance, first.owner, query('submit-2')))[0];
+      expect(newer).toMatchObject({ state: 'unknown', previous: { revision: 1 } });
+      expect(await readdir(root)).toEqual(before);
+      await queue.enqueue(input(2, '新版本'));
+      expect((await queue.statuses(first.instance, first.owner, query('submit-2')))[0]).toMatchObject({ state: 'pending', previous: { revision: 1 } });
+    } finally { await queue.close(); }
+  });
+
+  it('does not report a receipt for different attachment bytes or malformed batches', async () => {
+    const { queue, remote } = await fixture();
+    const snapshot = inputWithAttachment();
+    try {
+      await queue.enqueue(snapshot);
+      await queue.deliver(remote, { enabled: true });
+      const lookup = { memo: snapshot.memo, submissionId: snapshot.delivery.submissionId,
+        attachmentHashes: [snapshot.delivery.files[1].sha256] };
+      expect((await queue.statuses('local', 'users/test', [lookup]))[0].state).toBe('verified');
+      expect((await queue.statuses('local', 'users/test', [{ ...lookup, attachmentHashes: [] }]))[0].state).toBe('unknown');
+      await expect(queue.statuses('local', 'users/test', Array(11).fill(lookup))).rejects.toMatchObject({ code: 'INVALID_STATUS_QUERY' });
+      await expect(queue.statuses('local', 'users/test', [{ ...lookup, attachmentHashes: ['invalid'] }])).rejects.toMatchObject({ code: 'INVALID_STATUS_QUERY' });
+    } finally { await queue.close(); }
+  });
   it('normalizes the rolling-upgrade Memos prefix to 00_Inbox', async () => {
     const { queue } = await fixture();
     const submission = input();

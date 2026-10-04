@@ -141,3 +141,38 @@ CI/CD、生产部署、HTTPS、服务器系统服务均未新增或启用。Obsi
 - Memos 前端 lint 通过（675 个文件）；待办转换、保存校验与工具栏相关 10 项测试通过；生产构建通过，只有既有 `::highlight` 和大 chunk 警告。
 - Go 1.27 容器内 `go test ./server` 通过，覆盖普通笔记不变、待办 open/done 元数据和既有附件 bridge 回归。
 - ss-review：Pass。新增入口复用原版 Button、语义颜色、边框、焦点环和 `aria-pressed`；粗指针触控目标为 44px，紧凑分段不影响下方三列手机操作栏，无硬编码颜色或新增动画。
+
+
+## 2026-10-04 手机笔记流转状态（本地完成，未部署）
+
+### 行为与文件
+
+- Echo：`src/server/memos/queue.ts` 增加受限批量只读查询，`src/server/app.ts` 增加 `/api/memos/internal/statuses`，使用现有 bridge 凭据。查询按 instance/owner/memo 隔离，读取一次队列，不入队、不补投、不写正文。
+- Memos：`server/echo_bridge.go` 增加 `/api/echo/v1/memo-statuses`。核验登录和整批 memo 所有权，再使用与提交相同的快照组装，核对当前 submission、附件摘要和续写父关系；源正文摘要和附件名供前端与正在显示的版本比较。浏览器不获取 bridge token，不返回正文或附件字节。历史无法匹配时显示未确认，并保留其他已核验版本的凭证。
+- 手机：`MemoView/MemoDeliveryStatus.tsx`、`MemoView.tsx`、`hooks/useEchoBridge.ts`、`MemoEditor/index.tsx` 显示已保存/等待/已入库/冲突/失败/未知，提供展开详情、只读刷新和显式重试。设备暂存修改与已保存版本分开；编辑器提示暂存仅在设备。列表查询合并为每批最多 10 条，仅可见卡片自动刷新，后台暂停，查询有 25 秒超时。成功/冲突不持续轮询，回到前台或手动刷新可重新核对。
+- 当前队列没有持久的实时执行中标记和可靠核验时间，因此显示“等待投递”，不虚构“正在投递”或时间。GitHub 成功仍不代表电脑 Obsidian 已拉取。
+- 未修改数据库格式、凭据、生产开关或 CI/CD；未提交、推送、生产部署，也未删除任何真实内容。
+
+### 命令与结果
+
+- `npm run check`：通过；类型检查、45 项 Echo 测试及 Ignis 构建通过。新增测试覆盖批量查询只读、账户隔离、新旧版本、附件字节不一致、续写父关系与等待；原有构建警告保留。
+- Memos `node node_modules/typescript/bin/tsc --noEmit --skipLibCheck`、`node node_modules/@biomejs/biome/bin/biome check src tests`：通过，678 个文件检查完成。系统 pnpm 启动报 `unable to open database file`，采用现有 node_modules 中相同入口执行，无依赖版本变更。
+- Memos `node node_modules/vitest/vitest.mjs run --maxWorkers=4 --reporter=dot`：1541/1548 通过；7 项既有失败是 `memo-header-navigation.test.tsx` 的 4 项旧时间标签断言与 `use-auto-save.test.tsx` 的 3 项旧参数断言，相关实现和测试本轮未改。菜单测试按新 React Query hook 隔离 bridge 能力，9 项通过。
+- 最终 Memos 定向测试（`memo-delivery-status`、`echo-delivery-query`、`memo-action-menu`、`memo-editor-cache`）：32 项通过，包含断网保留回执、旧版本不冒充当前成功、设备草稿并列、可见列表批量及显式重试。
+- Memos `node node_modules/vite/bin/vite.js build`：通过；保留既有 CSS `::highlight`、大 chunk 和插件耗时警告。
+- 官方 Go 1.27.0 临时工具链通过官方清单 SHA-256 核对后使用，不做全局安装。`go test -v ./server`：通过，含新增所有权、认证、跨源拒绝与只读路由测试；后续 `go test ./server/... ./core/...` 中 root server、auth、mcp、server/test 和所有有测试的 core 包通过。api/v1 1 项及 frontend 7 项仍因 Windows 临时 SQLite 文件/目录句柄无法清理失败；api/v1/test 和 fileserver 因 gofakes3 既有依赖下载连接超时未运行完整。
+- `go test -race ./server/... ./core/...` 未完成：本机 C 编译器报 `64-bit mode not compiled in`；未修改系统编译器。广域竞态验收仍应在具备 64 位 C 工具链的环境补跑。
+- `npm run test:browser` 未启动：未配置 `OBSIDIAN_ASSETS_PATH`；本次未改 Echo/Ignis 前端，不能将下面的 Memos 控件验证冒充原版完整入口回归。
+- `git diff --check`：通过。
+
+### ss-review 与视觉验证
+
+按 `D:/AAA-Project/000-styleseed/engine/.claude/skills/ss-review/SKILL.md` 完成新增控件代码和浏览器审查：Pass。保留 Memos 原版界面优先，状态位于现有卡片内；新增组件使用语义颜色、13px 中文、data-slot、cn、原版 Button、焦点样式、aria-expanded 和 polite 状态播报。按钮最小 44px，操作间距 12px，长路径和提交可换行，不增加动画或全屏浮层。
+
+使用临时 Vite 页面加载真实 `MemoDeliveryStatus` 源组件与 Memos 样式，Playwright 用合成回执拦截状态 API。在 320/390/430px 宽度下均无横向溢出，全部按钮宽高至少 44px，查看状态产生 0 次提交请求。该验证覆盖新增控件，不是完整原版 Memos 登录/保存端到端或真机验收。截图位于 `C:/Users/10159/.codex/visualizations/2026/10/04/01a106fd-68c4-7282-8b69-306777720036/memos-status-{320,390,430}.png`，临时工具、合成测试库、预览脚本与日志位于系统临时目录，没有私人笔记。
+
+### 尚未闭环
+
+- 正式部署需要同时更新 Echo 查询端和 Memos 后端/前端，保持现有投递开关和凭据；本轮未执行。
+- 部署后验证真实历史笔记状态、手机实际操作和电脑 Obsidian 接收；没有逐条电脑回执时继续显示未核验。
+- 补跑上文广域 Go 依赖/竞态与 Echo 官方资源浏览器回归；既有前端断言失败未在本任务扩大修复。

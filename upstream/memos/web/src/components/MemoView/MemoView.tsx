@@ -29,6 +29,7 @@ import { canManageMemo } from "@/utils/user";
 import { MemoBody, MemoCommentListView, MemoHeader } from "./components";
 import { MEMO_CARD_BASE_CLASSES } from "./constants";
 import { useImagePreview } from "./hooks";
+import { MemoDeliveryStatus } from "./MemoDeliveryStatus";
 import { computeCommentAmount, MemoViewContext } from "./MemoViewContext";
 import { isMemoDetailPath, resolveMemoParentPage } from "./navigation";
 import type { MemoViewHandle, MemoViewProps } from "./types";
@@ -222,6 +223,10 @@ const MemoView = forwardRef<MemoViewHandle, MemoViewProps>((props, ref) => {
       />
 
       <MemoBody compact={compact} />
+
+      {!readonly && echoBridge?.enabled && currentUser && (
+        <MemoDeliveryStatus memo={memoData} owner={currentUser.name} detail={isInMemoDetailPage} />
+      )}
 
       {previewState.items.length > 0 && (
         <Suspense fallback={null}>

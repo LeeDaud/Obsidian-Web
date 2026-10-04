@@ -200,6 +200,37 @@ export class SubmissionQueue {
       return { state, revision: record.delivery.revision, error: record.error ?? null, commit: record.receipt?.commit };
     });
   }
+  async statuses(instance: string, owner: string, queries: { memo: string; submissionId: string; attachmentHashes: string[]; parentMemo?: string }[]) {
+    if (typeof instance !== 'string' || !instance || instance.length > 256 || typeof owner !== 'string' || !owner || owner.length > 256 ||
+      !Array.isArray(queries) || queries.length < 1 || queries.length > 10 ||
+      queries.some(query => !query || !/^memos\/[a-zA-Z0-9-]{1,80}$/.test(query.memo) ||
+        typeof query.submissionId !== 'string' || query.submissionId.length > 160 || !Array.isArray(query.attachmentHashes) ||
+        query.attachmentHashes.length > 100 || query.attachmentHashes.some(hash => typeof hash !== 'string' || !/^[a-f0-9]{64}$/.test(hash)) ||
+        (query.parentMemo !== undefined && (typeof query.parentMemo !== 'string' ||
+          (query.parentMemo !== '' && !/^memos\/[a-zA-Z0-9-]{1,80}$/.test(query.parentMemo)))))) {
+      throw new AppError(400, 'INVALID_STATUS_QUERY', '状态查询格式无效。');
+    }
+    return this.mutex.run(async () => {
+      const all = (await this.records()).filter(item => item.instance === instance && item.owner === owner);
+      return queries.map(query => {
+        const records = all.filter(item => item.memo === query.memo);
+        const record = records.find(item => item.delivery.submissionId === query.submissionId &&
+          (item.parent?.memo ?? '') === (query.parentMemo ?? '') &&
+          (item.state !== 'verified' || !!item.receipt?.commit) &&
+          JSON.stringify(item.delivery.files.filter(file => !isMarkdownPath(file.path)).map(file => file.sha256).sort()) ===
+          JSON.stringify([...query.attachmentHashes].sort()));
+        const previous = records.filter(item => item.state === 'verified' && item.receipt?.commit)
+          .sort((a, b) => b.delivery.revision - a.delivery.revision)[0];
+        const summary = (item: SubmissionRecord) => ({ revision: item.delivery.revision,
+          path: markdownPath(item), commit: item.receipt?.commit });
+        if (!record) return { memo: query.memo, state: 'unknown', previous: previous && summary(previous) };
+        const waiting = record.parent && !all.some(item => item.memo === record.parent!.memo && item.state === 'verified');
+        const state = record.state === 'pending' && waiting ? 'waiting_parent' : record.state;
+        return { memo: query.memo, state, ...summary(record), error: record.error ?? null,
+          previous: previous && previous !== record ? summary(previous) : undefined };
+      });
+    });
+  }
   async deliver(remote: BundleRemote, options: { enabled: boolean; now?: number }): Promise<void> {
     // No environment fallback to Echo's production sync flag.
     if (!options.enabled) return;

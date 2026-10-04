@@ -43,10 +43,12 @@ type echoBundleFile struct {
 }
 
 type echoSubmission struct {
-	Instance string `json:"instance"`
-	Owner    string `json:"owner"`
-	Memo     string `json:"memo"`
-	Parent   *struct {
+	SourceHash      string   `json:"-"`
+	AttachmentNames []string `json:"-"`
+	Instance        string   `json:"instance"`
+	Owner           string   `json:"owner"`
+	Memo            string   `json:"memo"`
+	Parent          *struct {
 		Memo string `json:"memo"`
 	} `json:"parent,omitempty"`
 	Delivery struct {
@@ -63,6 +65,7 @@ func newEchoBridgeService(profile *profile.Profile, store *store.Store, secret s
 func (s *echoBridgeService) registerRoutes(e *echo.Echo) {
 	e.GET("/api/echo/v1/status", s.status)
 	e.POST("/api/echo/v1/memos/:memoUID/submissions", s.submit)
+	e.POST("/api/echo/v1/memo-statuses", s.memoStatuses)
 }
 
 func (s *echoBridgeService) status(c *echo.Context) error {
@@ -120,6 +123,15 @@ func (s *echoBridgeService) submitSavedMemo(ctx context.Context, userID int32, m
 }
 
 func (s *echoBridgeService) submitMemo(ctx context.Context, userID int32, memoUID string) (*http.Response, error) {
+	submission, err := s.prepareMemo(ctx, userID, memoUID)
+	if err != nil {
+		return nil, err
+	}
+	return s.post(ctx, submission)
+}
+
+// prepareMemo builds the exact saved snapshot without enqueuing or changing it.
+func (s *echoBridgeService) prepareMemo(ctx context.Context, userID int32, memoUID string) (*echoSubmission, error) {
 	memo, err := s.store.GetMemo(ctx, &store.FindMemo{UID: &memoUID})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load memo for Echo submission")
@@ -168,11 +180,102 @@ func (s *echoBridgeService) submitMemo(ctx context.Context, userID int32, memoUI
 	if err != nil {
 		return nil, err
 	}
-	response, err := s.post(ctx, submission)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to submit memo to Echo")
+	return submission, nil
+}
+
+func (s *echoBridgeService) memoStatuses(c *echo.Context) error {
+	c.Response().Header().Set("Cache-Control", "no-store")
+	if s.profile.EchoBridgeURL == "" {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "Echo bridge is disabled"})
 	}
-	return response, nil
+	if c.Request().Header.Get("Authorization") == "" && !sameOrigin(c.Request().Header.Get("Origin"), s.profile.InstanceURL) {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "same-origin request required"})
+	}
+	user, err := s.authenticator.AuthenticateToUser(c.Request().Context(), c.Request().Header.Get("Authorization"), c.Request().Header.Get("Cookie"))
+	if err != nil || user == nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+	}
+	var input struct {
+		MemoUIDs []string `json:"memoUIDs"`
+	}
+	if err := json.NewDecoder(io.LimitReader(c.Request().Body, 4096)).Decode(&input); err != nil || len(input.MemoUIDs) < 1 || len(input.MemoUIDs) > 10 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid status query"})
+	}
+	type query struct {
+		Memo             string   `json:"memo"`
+		SubmissionID     string   `json:"submissionId"`
+		AttachmentHashes []string `json:"attachmentHashes"`
+		ParentMemo       string   `json:"parentMemo"`
+	}
+	queries := make([]query, 0, len(input.MemoUIDs))
+	sourceHashes := make(map[string]string)
+	attachmentNames := make(map[string][]string)
+	// Check every owner before reading any attachment or querying Echo.
+	for _, uid := range input.MemoUIDs {
+		if !regexp.MustCompile(`^[a-zA-Z0-9-]{1,80}$`).MatchString(uid) {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid memo UID"})
+		}
+		memo, err := s.store.GetMemo(c.Request().Context(), &store.FindMemo{UID: &uid})
+		if err != nil {
+			return err
+		}
+		if memo == nil || memo.CreatorID != user.ID {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "memo not found"})
+		}
+		digest := sha256.Sum256([]byte(memo.Content))
+		sourceHashes["memos/"+uid] = hex.EncodeToString(digest[:])
+	}
+	for _, uid := range input.MemoUIDs {
+		snapshot, err := s.prepareMemo(c.Request().Context(), user.ID, uid)
+		id := ""
+		hashes := []string{}
+		parentMemo := ""
+		if err == nil {
+			id = snapshot.Delivery.SubmissionID
+			sourceHashes["memos/"+uid] = snapshot.SourceHash
+			attachmentNames["memos/"+uid] = snapshot.AttachmentNames
+			if snapshot.Parent != nil {
+				parentMemo = snapshot.Parent.Memo
+			}
+			for _, file := range snapshot.Delivery.Files[1:] {
+				hashes = append(hashes, file.SHA256)
+			}
+		}
+		// A missing/unreadable attachment cannot be reported as a verified version.
+		queries = append(queries, query{Memo: "memos/" + uid, SubmissionID: id, AttachmentHashes: hashes, ParentMemo: parentMemo})
+	}
+	body, err := json.Marshal(map[string]any{"instance": s.profile.InstanceURL, "owner": fmt.Sprintf("users/%d", user.ID), "queries": queries})
+	if err != nil {
+		return err
+	}
+	request, err := http.NewRequestWithContext(c.Request().Context(), http.MethodPost, s.profile.EchoBridgeURL+"/api/memos/internal/statuses", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Authorization", "Bearer "+s.profile.EchoBridgeToken)
+	request.Header.Set("Content-Type", "application/json")
+	if s.profile.EchoBridgeHost != "" {
+		request.Host = s.profile.EchoBridgeHost
+	}
+	response, err := s.client.Do(request)
+	if err != nil {
+		return c.JSON(http.StatusBadGateway, map[string]string{"error": "投递状态暂不可查询"})
+	}
+	defer response.Body.Close()
+	result, err := io.ReadAll(io.LimitReader(response.Body, echoBridgeBodyLimit+1))
+	if err != nil || len(result) > echoBridgeBodyLimit || response.StatusCode != http.StatusOK {
+		return c.JSON(http.StatusBadGateway, map[string]string{"error": "投递状态暂不可查询"})
+	}
+	var statuses []map[string]any
+	if err := json.Unmarshal(result, &statuses); err != nil {
+		return c.JSON(http.StatusBadGateway, map[string]string{"error": "投递状态响应无效"})
+	}
+	for _, status := range statuses {
+		memo, _ := status["memo"].(string)
+		status["sourceHash"] = sourceHashes[memo]
+		status["attachmentNames"] = attachmentNames[memo]
+	}
+	return c.JSON(http.StatusOK, statuses)
 }
 
 func sameOrigin(origin, instanceURL string) bool {
@@ -271,6 +374,9 @@ func buildEchoSubmission(instance string, userID int32, memo *store.Memo, attach
 		return nil, errors.New("memo version is invalid")
 	}
 	submission := &echoSubmission{Instance: instance, Owner: fmt.Sprintf("users/%d", userID), Memo: "memos/" + memo.UID}
+	sourceDigest := sha256.Sum256([]byte(memo.Content))
+	submission.SourceHash = hex.EncodeToString(sourceDigest[:])
+	submission.AttachmentNames = []string{}
 	if len(parentUID) > 0 && parentUID[0] != "" {
 		submission.Parent = &struct {
 			Memo string `json:"memo"`
@@ -286,6 +392,7 @@ func buildEchoSubmission(instance string, userID int32, memo *store.Memo, attach
 	})
 	attachmentNames := map[string]int{}
 	for _, attachment := range orderedAttachments {
+		submission.AttachmentNames = append(submission.AttachmentNames, "attachments/"+attachment.UID)
 		digest := sha256.Sum256(attachment.Blob)
 		extension, err := safeAttachmentExtension(attachment.Filename, attachment.Type)
 		if err != nil {

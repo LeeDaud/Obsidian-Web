@@ -10,11 +10,68 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/require"
 
 	"github.com/usememos/memos/internal/profile"
+	"github.com/usememos/memos/server/auth"
 	"github.com/usememos/memos/store"
+	teststore "github.com/usememos/memos/store/test"
 )
+
+func TestMemoStatusesAreOwnerScopedAndReadOnly(t *testing.T) {
+	ctx := context.Background()
+	ts := teststore.NewTestingStore(ctx, t)
+	t.Cleanup(func() { _ = ts.Close() })
+	user, err := ts.CreateUser(ctx, &store.User{Username: "status-owner", Role: store.RoleAdmin, RowStatus: store.Normal})
+	require.NoError(t, err)
+	other, err := ts.CreateUser(ctx, &store.User{Username: "status-other", Role: store.RoleUser, RowStatus: store.Normal})
+	require.NoError(t, err)
+	_, err = ts.CreateMemo(ctx, &store.Memo{UID: "owned", CreatorID: user.ID, Content: "saved", Visibility: store.Private})
+	require.NoError(t, err)
+	_, err = ts.CreateMemo(ctx, &store.Memo{UID: "foreign", CreatorID: other.ID, Content: "private", Visibility: store.Private})
+	require.NoError(t, err)
+	calls := 0
+	remote := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		require.Equal(t, "/api/memos/internal/statuses", r.URL.Path)
+		require.Equal(t, "Bearer service-secret", r.Header.Get("Authorization"))
+		var body map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		require.NotContains(t, body, "delivery")
+		_, _ = w.Write([]byte(`[{"memo":"memos/owned","state":"unknown"}]`))
+	}))
+	defer remote.Close()
+	service := newEchoBridgeService(&profile.Profile{EchoBridgeURL: remote.URL, EchoBridgeToken: "service-secret", InstanceURL: "https://memos.example.com"}, ts, "test-secret")
+	service.client = remote.Client()
+	e := echo.New()
+	service.registerRoutes(e)
+	token, _, err := auth.GenerateAccessTokenV2(user.ID, user.Username, "ADMIN", "ACTIVE", []byte("test-secret"))
+	require.NoError(t, err)
+	request := func(body, bearer, origin string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/api/echo/v1/memo-statuses", strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Origin", origin)
+		if bearer != "" {
+			r.Header.Set("Authorization", "Bearer "+bearer)
+		}
+		w := httptest.NewRecorder()
+		e.ServeHTTP(w, r)
+		return w
+	}
+	require.Equal(t, http.StatusForbidden, request(`{"memoUIDs":["owned"]}`, "", "https://evil.example").Code)
+	require.Equal(t, http.StatusUnauthorized, request(`{"memoUIDs":["owned"]}`, "", "https://memos.example.com").Code)
+	require.Equal(t, http.StatusNotFound, request(`{"memoUIDs":["owned","foreign"]}`, token, "").Code)
+	require.Zero(t, calls)
+	require.Equal(t, http.StatusBadRequest, request(`{"memoUIDs":[]}`, token, "").Code)
+	result := request(`{"memoUIDs":["owned"]}`, token, "")
+	require.Equal(t, http.StatusOK, result.Code)
+	require.Equal(t, "no-store", result.Header().Get("Cache-Control"))
+	require.NotContains(t, result.Body.String(), "service-secret")
+	require.NotContains(t, result.Body.String(), "saved")
+	require.Contains(t, result.Body.String(), "sourceHash")
+	require.Equal(t, 1, calls)
+}
 
 func TestPostNormalizesLegacyMarkdownPrefix(t *testing.T) {
 	var received echoSubmission

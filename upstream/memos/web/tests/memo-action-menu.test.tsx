@@ -30,6 +30,11 @@ vi.mock("@/components/MemoActionMenu/hooks", () => ({
   useMemoActionHandlers: () => handlers,
 }));
 
+vi.mock("@/hooks/useEchoBridge", () => ({
+  useEchoBridgeStatus: () => ({ data: { enabled: false } }),
+  useSubmitMemoToEcho: () => ({ isPending: false, mutate: vi.fn() }),
+}));
+
 vi.mock("@/utils/i18n", () => ({
   useTranslate: () => (key: string) => key,
 }));

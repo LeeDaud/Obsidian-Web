@@ -388,6 +388,9 @@ const MemoEditorImpl: React.FC<MemoEditorProps> = ({
 
         {/* Metadata and toolbar grouped together at bottom */}
         <div className="w-full flex flex-col gap-2">
+          <p data-slot="editor-draft-status" className="text-[13px] leading-normal text-muted-foreground">
+            {isSaving ? "正在保存到 Memos…" : "编辑中 · 尚未保存到 Memos；暂存仅在当前设备"}
+          </p>
           <EditorMetadata
             memoName={memoName}
             uploadingLocalFileURLs={inlineImageUpload.uploadingLocalFileURLs}

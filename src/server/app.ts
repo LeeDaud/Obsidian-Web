@@ -56,6 +56,9 @@ export function mount(app: express.Express, config: AppConfig) {
     if (!status) return void res.status(404).json({ error: '提交不存在。' });
     res.json(status);
   }));
+  app.post('/api/memos/internal/statuses', requireMemos(config), handle(async (req, res) => {
+    res.json(await config.memos!.queue.statuses(req.body?.instance, req.body?.owner, req.body?.queries));
+  }));
   app.get('/api/capture/status', (_req, res) => res.json({ syncEnabled: config.syncEnabled }));
   app.post('/api/capture/open', handle(async (req, res) => res.json(await config.vault.open(req.body))));
   app.post('/api/capture/heartbeat', handle(async (req, res) => res.json(await config.vault.heartbeat(req.body.id))));
