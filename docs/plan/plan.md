@@ -461,4 +461,4 @@ Markdown 中只写一条正向 WikiLink。所谓“双链”由 Obsidian 基于�
 - 执行 Echo typecheck/test/build、Memos 受影响 Go 与前端测试、lint/typecheck/build，记录实际结果和环境限制。
 - 预计涉及 src/server/memos/queue.ts、src/server/app.ts、upstream/memos/server/echo_bridge.go、web/src/hooks/useEchoBridge.ts、MemoView/编辑器组件及相关测试、docs/todo/todo.md、docs/setup/verification.md。
 
-用户已确认开始实施；本地实现与验证已完成，实际检查和环境限制见 docs/setup/verification.md。正式部署与真机验收仍待单独授权。
+用户已确认开始实施；本地实现与验证已完成，实际检查和环境限制见 docs/setup/verification.md。随后明确授权“提交并推送、部署”；`76e66b3` 已推送并部署，保留原凭据、数据库和投递配置。手机硬件验收仍待实际使用，电脑逐条接收仍无回执。

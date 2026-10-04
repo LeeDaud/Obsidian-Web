@@ -44,3 +44,8 @@ CLAUDE.md 是本项目完整规则与事实来源。执行任务前完整读取�
 - `memos.leedaud.xyz` 已通过 Caddy HTTPS 转发到独立 `echo-memos` 容器；实例为 private，公开注册关闭，Memos、Echo、Caddy 与 Vaultwarden 健康。
 - 服务端 bridge token 按容器 UID 使用独立 `0400` 文件；文本入队接口和 Memos → GitHub worker 已启用，真实合成 Markdown 已通过提交内容核验。附件、状态回显与条件清理仍关闭。
 
+## Memos 状态回显上线（2026-10-04）
+- 用户明确授权本轮源码提交、推送及部署；`76e66b3` 已上线 Echo/Memos，原版手机列表和详情支持当前版本投递状态及仓库回执显示。
+- 状态查询只读且核验登录用户与 memo 所有权；10 条历史笔记的当前版本与仓库回执匹配，查询未改变队列。沿用现有凭据和投递配置，无数据库迁移或真实内容删除。
+- “已投递到仓库”仅表示 GitHub 内容核验成功，电脑 Obsidian 是否拉取仍无逐条回执；手机硬件验收另待实际使用。部署与检查见 docs/setup/production.md 和 docs/setup/verification.md。
+

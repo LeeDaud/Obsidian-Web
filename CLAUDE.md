@@ -68,4 +68,9 @@
 - 用户已授权并完成 `memos.leedaud.xyz` 部署；Caddy HTTPS 转发至独立 `echo-memos` 容器，实例为 private 且关闭公开注册，Echo、Caddy 与 Vaultwarden 验收正常。
 - Memos bridge token 只以按容器 UID 隔离的服务器 `0400` 文件提供；Memos 文本提交接口及独立 GitHub worker 已启用。合成 Memo 已真实写入 `LeeDaud/Echo` 并按提交核验 Markdown 内容；附件、状态回显和条件清理仍未启用。
 
+## Memos 状态回显上线（2026-10-04）
+- 用户明确授权本轮源码提交、推送及部署；`76e66b3` 已上线 Echo/Memos，原版手机列表和详情支持当前版本投递状态及仓库回执显示。
+- 状态查询只读且核验登录用户与 memo 所有权；10 条历史笔记的当前版本与仓库回执匹配，查询未改变队列。沿用现有凭据和投递配置，无数据库迁移或真实内容删除。
+- “已投递到仓库”仅表示 GitHub 内容核验成功，电脑 Obsidian 是否拉取仍无逐条回执；手机硬件验收另待实际使用。部署与检查见 docs/setup/production.md 和 docs/setup/verification.md。
+
 

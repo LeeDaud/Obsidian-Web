@@ -150,3 +150,13 @@ docker start echo-capture
 - Memos 使用 Node 24.14 和 Go 1.27 构建完成，运行镜像为 `sha256:4f9cbf85d84f7718aa8a0bc931158713c4081d715a9f9bcafa1a55b90759c8ee`。
 - `echo-memos` 与 `echo-capture` 均为 healthy；Caddy 与 Vaultwarden 保持运行。Memos、Echo 与 Vaultwarden 正式 HTTPS 入口均返回 200。
 - 本轮未创建真实待办或 GitHub 内容；数据格式由前端、bridge 单元测试及生产镜像编译验证。
+
+## 2026-10-04 手机笔记流转状态部署
+
+- 用户明确要求“提交并推送、部署”；源码提交 `76e66b3`（`feat: 增加手机笔记流转状态显示`）已推送至 `origin/main`。
+- 在原 release `/opt/echo/releases/20260928` 构建 Echo 与 Memos，仅使用 `docker compose -p echo ... up -d --no-deps echo memos` 更新两个应用容器。沿用现有 compose、凭据、数据库与投递配置，未执行迁移、创建生产笔记或删除真实内容。
+- Echo 运行镜像 `sha256:65785344c126a284b5a7e72bb54ff3da9e83e855e65dd53033cf7c1c99ed9499`，Memos 运行镜像 `sha256:1be2eb58485f34b688ab1cff62ffe2a86eee3ba77b5893516fc08326c304b065`，镜像标注源码 revision `76e66b3`。两应用均 healthy；Caddy 与 Vaultwarden 的启动时间和镜像未变化，Vaultwarden healthy。三个 HTTPS 正式入口均返回 200。
+- 登录后查询 10 条既有笔记，全部返回 `verified`；当前源正文摘要与 API 中的笔记正文匹配，仓库路径与提交凭证存在，查询前后队列文件摘要一致。无登录同源查询返回 401、缺少 Origin 返回 403、登录查询不存在的笔记返回 404。凭据仅在服务器及进程内存中使用，未输出正文或 token。
+- Memos 旧镜像已保留为 `echo-memos:rollback-20261004-status`。Echo 旧镜像底层内容缺失，直接 tag 和 commit 无法完成；从尚在运行的旧容器仅复制 `/app/src` 到 `/opt/echo/rollback-status-20261004/src`，以新镜像的相同依赖和静态资源构建 `echo-capture:rollback-20261004-status`。这是旧应用源码回滚版本，不是旧镜像完整副本；不包含数据或 secrets 挂载。
+- 回滚目录只保存应用源码及 Dockerfile，保留用于本轮回滚，不自动清理；部署包为 `/opt/echo/release-status-76e66b3.tar.gz`。清理另行授权。CI/CD 配置未改动，本轮通过手动构建部署完成。
+- GitHub 回执不代表电脑 Obsidian 已拉取；没有新增电脑代理或逐条接收回执，真机使用仍待用户实际验收。
