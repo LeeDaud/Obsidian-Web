@@ -160,3 +160,11 @@ docker start echo-capture
 - Memos 旧镜像已保留为 `echo-memos:rollback-20261004-status`。Echo 旧镜像底层内容缺失，直接 tag 和 commit 无法完成；从尚在运行的旧容器仅复制 `/app/src` 到 `/opt/echo/rollback-status-20261004/src`，以新镜像的相同依赖和静态资源构建 `echo-capture:rollback-20261004-status`。这是旧应用源码回滚版本，不是旧镜像完整副本；不包含数据或 secrets 挂载。
 - 回滚目录只保存应用源码及 Dockerfile，保留用于本轮回滚，不自动清理；部署包为 `/opt/echo/release-status-76e66b3.tar.gz`。清理另行授权。CI/CD 配置未改动，本轮通过手动构建部署完成。
 - GitHub 回执不代表电脑 Obsidian 已拉取；没有新增电脑代理或逐条接收回执，真机使用仍待用户实际验收。
+
+## 2026-10-05 状态位置与编辑续写调整部署
+
+- 沿用用户本功能“提交并推送、部署”授权，源码 `7ce26b5`（`feat: 调整笔记状态位置与编辑续写行为`）已推送至 main。三种状态迁到时间戳旁，模式选择整行等宽，双击及菜单按当前版本投递状态分流。
+- 在原 release 内构建独立 `echo-memos:status-7ce26b5`，后台构建日志/退出标记位于 `/opt/echo/build-status-7ce26b5.{log,exit}`，确认退出 0 及源码标签后才切换现有 Memos 镜像并执行 `docker compose -p echo ... up -d --no-deps memos`。
+- Memos 运行镜像 `sha256:a1958dfd5f12b8ca81c86f727543a060c3db756692db39efd71c0ded87242b05`，healthy；旧镜像 `sha256:1be2eb58485f34b688ab1cff62ffe2a86eee3ba77b5893516fc08326c304b065` 保留为 `echo-memos:rollback-20261005-status`。Echo、Caddy、Vaultwarden 的镜像及启动时间未变化，Echo/Vaultwarden healthy。
+- Memos、Echo、Vaultwarden 正式 HTTPS 均返回 200；登录后查询 10 条历史笔记均 verified，当前正文摘要匹配，查询前后队列未变化。没有创建、编辑、删除或重投生产笔记；凭据、compose、数据库、CI/CD 均未修改。
+- 部署包 `/opt/echo/release-status-7ce26b5.tar.gz` 与构建日志保留供回滚和核验，按既有授权边界不自动删除。网页状态仍表示仓库结果，不表示电脑 Obsidian 已拉取。
