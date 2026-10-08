@@ -10,3 +10,12 @@ coverage/
 .playwright-mcp/
 __pycache__/
 *.pyc
+
+# Android: generated files, local machine configuration and private signing keys
+apps/android/.gradle/
+apps/android/**/build/
+apps/android/local.properties
+apps/android/*.jks
+apps/android/*.keystore
+apps/android/.idea/
+apps/android/*.iml

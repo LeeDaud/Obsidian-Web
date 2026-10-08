@@ -1,0 +1,36 @@
+Echo Android 0.2.0 — third-party components
+
+This native application uses the following runtime components:
+
+AndroidX (Activity, Compose, Lifecycle, Core, Room, WorkManager and their AndroidX dependencies)
+Source: https://android.googlesource.com/platform/frameworks/support/
+License: Apache License 2.0
+
+Kotlin standard library / kotlinx.coroutines
+Source: https://github.com/JetBrains/kotlin and https://github.com/Kotlin/kotlinx.coroutines
+License: Apache License 2.0
+
+Markwon 4.6.2 (core, task lists and strikethrough)
+Source: https://github.com/noties/Markwon
+License: Apache License 2.0
+
+Gson 2.11.0
+Source: https://github.com/google/gson
+License: Apache License 2.0
+
+CommonMark 0.13.0 (including extension modules used by Markwon)
+Source: https://github.com/commonmark/commonmark-java
+License: BSD 2-Clause
+The original CommonMark copyright and license text is included in commonmark-license.txt.
+
+The full Apache License 2.0 text is included in apache-2.0-license.txt.
+Lucide icon nodes, extracted from the project's lucide-react dependency
+Source: https://github.com/lucide-icons/lucide
+License: ISC, with MIT notices for Feather-derived icons (LUCIDE-LICENSE.txt).
+
+Memos logo and reference theme/layout
+Source: https://github.com/usememos/memos
+License: MIT (MEMOS-LICENSE.txt).
+
+This APK contains Memos reference artwork, but not the Memos web application or the vendored Ignis/Obsidian runtime.
+Test-only JUnit/Robolectric components are not application runtime code.

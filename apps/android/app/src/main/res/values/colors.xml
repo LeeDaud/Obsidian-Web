@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="surface_page">#FAFAFA</color>
+    <color name="surface_card">#FFFFFF</color>
+    <color name="text_primary">#3C3C3C</color>
+    <color name="text_secondary">#6A6A6A</color>
+    <color name="surface_muted">#E8E6E1</color>
+</resources>

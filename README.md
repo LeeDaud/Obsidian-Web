@@ -7,6 +7,8 @@ Echo 是一套面向手机快速记录的 Obsidian 输入链路。项目保留�
 
 两条入口共用 Echo 的 GitHub 投递链路，但应用源码、服务器临时数据、GitHub 输入仓库和电脑知识库彼此分离。
 
+Android 独立 App 0.2.0 已完成本地实现，可离线记录、保存 Markdown/附件并配置手机直接投递 GitHub，ObsidianHub 接入后置。安装配置见 [Android 指南](docs/setup/android.md)，需求/规划见 [Android 需求](docs/plan/android-requirements.md)及[技术规划](docs/plan/android-architecture.md)。模拟器/真机和真实仓库联调仍待验收；旧远端容器源码保留但不编入 APK。
+
 ## 当前状态
 
 | 入口 | 地址 | 状态 |

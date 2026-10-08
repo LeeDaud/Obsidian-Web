@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Echo</string>
+    <string name="connection_title">暂时无法打开笔记</string>
+    <string name="connection_message">请检查网络后重试。已有设备草稿会保留在此 App 中。</string>
+    <string name="retry">重新连接</string>
+    <string name="dismiss">关闭提示</string>
+    <string name="unsupported_link">暂时无法打开这个链接</string>
+    <string name="chooser_unavailable">暂时无法选择文件，请检查系统文件应用</string>
+    <string name="renderer_message">页面已中断，重新连接后可恢复已暂存的草稿。</string>
+    <string name="download_preparing">正在准备文件</string>
+    <string name="download_saved">文件已保存</string>
+    <string name="download_failed">暂时无法保存文件，请重试。首版支持保存不超过 20 MB 的文件。</string>
+</resources>

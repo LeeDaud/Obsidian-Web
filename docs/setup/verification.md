@@ -1,5 +1,118 @@
 # 原版集成验收记录
 
+## 2026-10-08 原 Web 格式和全部功能核对：R0 修复
+
+用户再次提出保留原 Web 格式、按钮、笔记区及相关功能。源码审计确认当前不是完整迁移；详细格式/功能矩阵见 [android-web-parity.md](android-web-parity.md)，完整本地原组件复用的新渲染层方案见 plan.md，尚待确认。
+
+本轮已直接修复：quiet 按钮的 6dp 圆角、13sp 常规字重、muted/70 与整体禁用透明度；中间 44dp 带边框加号方框；原笔记显示“更新”、冻结笔记入口显示“续写”；卡片正文使用原 card-foreground。列表增加复制内容与父/子入口，详情增加关联入口，inline 编辑优先匹配实际编辑记录，避免置顶父笔记替代子卡片。
+
+检查：本地 APK/qa APK/设备测试包构建通过；31 项本地测试全部通过，覆盖投递中和已核验两类续写不改变父正文文件、父记录及队列快照，以及置顶父笔记下子编辑位置；API 26 隔离设备 3 项交互/视觉回归通过。Lint 0 错误、11 条已有 API/版本/KTX/资源建议。中途新合成测试补齐 attempt 凭据、纯布局测试不依赖仓库启动后重跑通过，未修改业务保护以让测试通过。差异检查通过。
+
+主 APK：`apps/android/app/build/outputs/apk/debug/app-debug.apk`，SHA-256：`a6f4f543d3f6e5dc67e84bb7e4ddedd461530adbfff33dd3257d7f453887c985`；这是 R0 修复包，不是完整 Web 迁移包。截图位于 build/android-qa/ui-reference。按 ss-review 检查 R0 控件与关系行，原版优先，保留语义按钮/关系入口/固定尺寸；整体一致性仍为 Needs Improvement，原 CodeMirror、阅读格式、画廊、任务、多引用及其他缺口未被声明完成。
+
+Web 生产代码、原生数据格式、数据库、凭据、真实内容、CI/CD及投递协议未改，未提交、推送或部署。只有完整新方案确认后才切换渲染架构；不删除旧实现或私人内容。
+
+## 2026-10-08 Android 图标、安全区与日历细节优化
+
+用户已接受页面重构并提出本轮四项优化，沿用已确认的原版 UI 工作范围实施。
+
+- 启动图标引用 `res/drawable/ic_memos.webp`，内容与网页 index.html 的 favicon `public/logo.webp` 逐字节一致，SHA-256 为 `f87a44fb961d32a1cece3d00717289b4a30f6528c61a6785d097e4feab291859`；主 APK 的各密度 application-icon 均指向该资源，roundIcon 同步。旧 Echo 图标保留，未删除。
+- `NativeActivity` 开启 edge-to-edge，`MemosHeader` 使用实际 statusBars/displayCutout 留白；浅深色同步状态栏/导航栏图标。实际 API 26 窗口标志与首页截图核验通过。Robolectric API 35 的 52dp 合成顶部安全区测试通过，完整顶栏高度 100dp，未重复计算 padding；这不是 API 35 真机证据。
+- 侧栏日历参考网页 `ActivityCalendar/cellStyles.ts` 与 `utils.ts`：固定 30dp 日期方块、6dp 圆角、4dp 格间距，按最大日计数的四分位使用 foreground 的 6%/12%/20%/30% 填色，不再添加圆点行。浅深色检查带/不带笔记格高一致，日期点击仍返回正确日期。
+- 月份栏在紧凑模式移除“今天”按钮，避免月份被挤压；顶栏无动作的切换箭头移除；小屏/大字体的草稿状态按语义分行，保留既有 UI 结构。
+
+检查结果：
+
+| 检查 | 结果 |
+| --- | --- |
+| `assembleDebug assembleQa testDebugUnitTest assembleQaAndroidTest lintDebug` | 通过；新增测试修正导入和语义子节点定位后完成 |
+| 最终 `testDebugUnitTest` | 29 项全部通过；原有 28 项与 API 35 合成高状态栏回归 |
+| API 26 隔离设备 | 原有保存/菜单/双击交互、主页浅深色/状态菜单、侧栏日期行高/筛选/实际 statusBar 位置，共 3 项通过；没有配置真实目标或投递真实内容 |
+| 图标与 APK | favicon 资源哈希相同；aapt 主入口 icon 正确；APK v2 调试签名通过 |
+| Lint / 差异检查 | 0 错误、11 警告：原有 9 条 API/版本/KTX 建议，以及保留旧图标未使用、新 bitmap 在 drawable 中的资源位置建议；不删除或全局抑制以掩盖这些提示。`git diff --check` 通过 |
+
+主 APK 仍为 0.2.0 / versionCode 2，路径 `apps/android/app/build/outputs/apk/debug/app-debug.apk`；SHA-256：`81bbf8dfea7e1d517becb3f5053ebe28e9b45545bab8be86a56546e9f76b343e`。本轮截图位于 build/android-qa 的 `ui-reference/ui-visual/detail-calendar-{light,dark}-390.png` 和 `logs/detail-home-390.png`。截图等待系统 UI 更新稳定，避免把主题切换瞬间的旧系统栏颜色当作最终表现。
+
+按 ss-review 检查本轮新增/修改控件：**Pass（本轮范围）**，真实 inset、语义日期描述、固定格高、主题对比和状态换行已核验；原网页紧凑尺寸与系统字体按原版优先保留。未做整套页面重新设计。仍建议在用户的当前 Android/刘海手机、大字体和横屏下确认系统栏/键盘行为；API 26 截图和 API 35 合成测试不能代替该硬件验收。历史完整逐像素矩阵的限制继续保留。
+
+关于 GitLab：当前 `NetworkTransport` 仍只访问 `https://api.github.com`，本轮未新增提供者。GitLab 官方 [Commits API](https://docs.gitlab.com/api/commits/) 支持多文件操作提交，[Repository Files API](https://docs.gitlab.com/api/repository_files/) 可用于按提交读取核验，未来可单独适配国内部署的实例；实际网络可达性需针对实例测试，不能仅替换现有 GitHub 配置地址。存储/队列/凭据、Web 服务和 CI/CD未改，未提交、推送、部署或公开发布。
+
+## 2026-10-08 Android 原网页 UI 重构验证
+
+用户确认以当前 Memos 手机网页为基准重构，保持本地原生运行、离线存储及 GitHub 直投。计划提交为 `80597b5`，未推送。本节是新的验收记录；下文旧容器或早期原生构建记录不代表本节已逐像素通过。
+
+### 实现与实际检查
+
+- `EchoApp.kt` 改为原网页的 48dp 顶栏与抽屉导航，主页内嵌编辑器/列表；`MemosTheme.kt` 直接转换原网页 OKLCH 主题，`MemosNavigation.kt`、`MemosFeed.kt` 负责原版导航与卡片。使用原网页 Lucide 节点与 Memos 图片，APK 内附原许可证。
+- 编辑器改为等宽笔记/待办选择和“暂存 / + / 保存”；三种状态位于时间戳旁，三点菜单提供编辑/续写、置顶、归档及详情。设备设置保留 GitHub 配置；输入、暂存及导航不新增草稿投递。
+- 修复已保存笔记重新编辑为空：通过已有完成日志识别保存后的空草稿占位，仍保留用户主动清空的后续草稿。没有 Room schema/文件格式变更。光标/选区变化不再创建草稿版本；正文双击保护链接、代码、图片及待办勾选区域。
+
+| 检查 | 结果 |
+| --- | --- |
+| `gradlew.bat --offline --no-daemon assembleDebug assembleQa testDebugUnitTest assembleQaAndroidTest lintDebug` | 通过；最终本地构建与测试包已生成 |
+| Android 本地测试 | 28 项全部通过；含保存后重新编辑、主动清空、菜单编辑、待办暂存、不投递与既有 mock GitHub/存储回归 |
+| API 26 隔离 qa 包 `MemosInteractionTest,MemosVisualTest` | 390px 最终包 2 项通过；实际菜单编辑、取消、正文双击、三种状态、已投递隐藏投递入口及浅/深色截图 |
+| 最终 API 26 实际屏幕尺寸 | 320/390/430px `MemosVisualTest` 各 1 项通过，均使用实际 AVD 屏幕尺寸；最终浅/深色、日历与菜单截图已收集。结束后停止本次模拟器，恢复测试配置为 390px |
+| `node --import tsx apps/android/web-reference.ts` | 真实原版 React 页面配合合成 Connect 响应，320/390/430px 无横向溢出，0 pageerror；首页、详情、日历、抽屉与深色截图已保存 |
+| Android Lint / APK 签名 | 0 错误、9 条版本/KTX 写法建议；可访问性与 Compose modifier 新警告已修正。APK v2 调试签名核验通过，1 个签名者 |
+
+最终主 APK：`apps/android/app/build/outputs/apk/debug/app-debug.apk`；`xyz.leedaud.echo` / 0.2.0 / versionCode 2，最低 API 26、目标 API 36。SHA-256：`bc25ca29c466d7e40e3512a42497e081e2b525461b3862e242afe32cc3953253`。合成截图与日志位于已忽略的 `apps/android/app/build/android-qa/ui-reference/`、`logs/`；没有私人账号或真实仓库写入。
+
+### ss-review 与一致性结论
+
+按 `D:/AAA-Project/000-styleseed/engine/.claude/skills/ss-review/SKILL.md` 完成原生等效审查，结果为 **Needs Improvement**。颜色已集中为原网页语义主题；新 GitHub 设置有标签、开关、密码遮罩和触控目标；系统安全区、滚动与原生焦点行为保留。原版优先，源网页的 24/28/32px 紧凑控件按原网页复制，不以通用 StyleSeed 重绘；React/Tailwind 专属条目不适用于 Compose。
+
+**本轮不宣称 UI 已“一模一样”。** 尚需闭环：
+
+- `EchoApp.kt:230` 的 BasicTextField 未复制 CodeMirror 语法装饰；`EchoApp.kt:469` 的 Markwon 阅读与 `MemosFeed.kt:66` 的卡片仍缺少网页标签胶囊/图片画廊等细节，需要按原网页逐项补齐。字体跨 Windows Chromium 与 Android 也不相同，尚未做同一手机上的逐像素比较。
+- 详情、搜索/标签、归档、附件及设备设置已有入口和本地行为，但所有状态、320/430px 长内容、图片与字体缩放的逐页截图矩阵未完成。设备设置保留直投所需字段，不伪造网页服务器账号/管理后台。
+- 早期 `wm size` 虚拟缩放截图有黑边，430px 截图曾返回 null；这些失败不算通过。随后使用隔离 AVD 的真实屏幕尺寸复测；实际原生截图不代替真实中文输入法、录音/位置权限、系统分享和当前 Android API 验收。
+
+本轮未修改 Web 生产代码、服务、数据库 schema、凭据或 CI/CD；未部署、推送或公开发布。只提交过 UI 计划，其余本地 Android 实现和文档保留在工作区；原本已有的未提交改动没有回退或混入计划提交。
+
+## 2026-10-08 Android WebView 容器原型验证
+
+后续用户明确此容器不满足独立 App 目标。以下仅是历史原型构建和回归证据，不作为本地独立运行、离线存储或手机直投 GitHub 的验收结论。新方案目前只完成需求与规划文档，尚未实施；本轮文档差异与链接检查通过，无新增功能测试成绩。
+
+用户确认实施 `docs/plan/plan.md` 的 Android 客户端方案：原生 Android Activity/WebView 承载现有 HTTPS Memos 界面，沿用 Memos → Echo → GitHub；不接入 ObsidianHub、不引入手机 GitHub 凭据、不修改服务端或正式数据。
+
+### 本地交付与检查
+
+| 检查 | 结果 |
+| --- | --- |
+| `apps/android/gradlew.bat --offline --no-daemon assembleDebug assembleDebugAndroidTest testDebugUnitTest lintDebug` | 通过；主 APK 与设备测试 APK 已构建 |
+| Android 单元测试 | 4 项通过；受信任路由、伪造域名/协议/端口、外部协议、受信任文件/Blob 来源 |
+| Android Lint | 0 错误、2 警告：API 33 返回属性在旧版本忽略、存在更高 Gradle 版本；固定版本复用已有工具链 |
+| `apksigner.bat verify --verbose …/app-debug.apk` | 通过，APK v2 调试签名，1 个签名者 |
+| `aapt.exe dump badging …/app-debug.apk` | Echo / `xyz.leedaud.echo` / 0.1.0，最低 API 26，目标/编译 API 36；无 ABI 专属原生库 |
+| `npm run typecheck` | 通过 |
+| `npm test` | 6 文件、45 项通过；沙箱 realpath EPERM 后在受审查的本地环境重跑通过 |
+| `npm run build` | 通过；Ignis 既有 eval 和 Svelte 可访问性警告保留 |
+| Memos `node node_modules/vitest/vitest.mjs run tests/memo-editor-cache.test.ts tests/memo-editor-todo-mode.test.ts tests/memo-delivery-status.test.tsx tests/memo-delivery-edit.test.tsx tests/memo-action-menu.test.tsx tests/echo-delivery-query.test.tsx` | 6 文件、47 项通过，合成数据回归；不代表 Android 实机通过 |
+| `git diff --check` | 通过；Windows CRLF 转换提示不影响检查 |
+
+工具链使用项目外已有 JDK 21.0.10、Android SDK 36 / Build Tools 35.0.0、AGP 8.12.0 和 Gradle 8.13。缺少的 Maven 构建依赖仅下载到现有工具缓存，没有全局安装或修改环境变量持久配置。Wrapper 源于缓存的官方 Gradle 8.13，分发校验固定为官方 `20f1b1176237254a6fc204d8434196fa11a4cfb387567519c61556e8710aed78`。
+
+交付主 APK：`apps/android/app/build/outputs/apk/debug/app-debug.apk`，SHA-256：`c259c7773529fd9727712d488b8ceded33e9fb4668d9509e35336fee55b7d8bb`。安装说明位于 `apps/android/README.md`；APK 与构建缓存已忽略，既有本机调试密钥不复制进源码。
+
+### 原生行为与代码审查
+
+- 保留 Cookie 与 DOM storage；不清空 WebView 数据。暂停/恢复仅通过已核对的 Memos pagehide/pageshow 处理器刷新本地草稿并暂停/恢复 SSE，不调用保存或投递接口。系统直接杀进程仍可能早于异步刷新，不承诺恢复尚未暂存的最后输入或本地附件。
+- 文件选择使用 ACTION_OPEN_DOCUMENT，保留页面声明的类型/多选；只接受系统返回的 content URI，取消回调为空，不申请整个存储空间权限。
+- 录音仅授权已有 AUDIO_CAPTURE，定位只允许固定 HTTPS origin，系统权限按需申请，拒绝/取消不默许授权。其他 WebView 权限仍拒绝；没有新增相机或后台权限。
+- 系统返回在 API 33+ 使用 OnBackInvokedCallback，API 26–32 使用旧回调；Lint 的 GestureBackNavigation 仅在已实现新回调的旧版兼容方法上局部说明抑制，未全局关闭检查。根页返回桌面保留任务；软键盘和安全区通过系统 Insets/adjustResize 处理。
+- 下载/图片导出仅处理受信任文件/Blob，以一次性 evaluateJavascript 读取结果并由系统保存选择器确定目标；无 addJavascriptInterface、无任意路径写入。最大 20 MB，取消不报成功，失败保留页面。
+- App 不处理外部输入 URL；仅固定 Memos origin 内部导航，外部受限协议使用系统应用。拒绝明文 HTTP、混合内容、证书错误及 file/content 顶层访问。禁止系统备份和设备迁移私有 WebView 数据。
+
+按 `D:/AAA-Project/000-styleseed/engine/.claude/skills/ss-review/SKILL.md` 审查新增原生连接提示：**Needs Improvement（设备视觉验证缺失；代码检查通过）**。原 Memos 界面不重绘；原生提示使用集中颜色资源和夜间变体、18sp 标题/14sp 正文、24dp 间距、12dp 操作间距、48dp 触控目标、原生焦点/ripple、polite 状态反馈与可关闭提示；没有新增动画。React/Tailwind 专属项不适用于原生 View；Android 系统字体与原生控制保持平台一致。320/390/430 等效宽度的键盘、字体缩放、安全区及提示截图尚未实测，不能宣称完整视觉通过。
+
+### 未闭环与发布边界
+
+- `emulator -list-avds` 为空，SDK 无 system-images；`adb devices -l` 无已连接设备。未安装模拟器镜像或操作用户手机。
+- `AndroidSmokeInstrumentation` 已编译入设备测试 APK，尚未运行；测试用于合成草稿暂停刷新及 Activity 重建保留，不是强杀、完整 Memos 登录或投递验证。
+- 中文键盘、文件选择/取消、返回手势、录音/定位授权、文件下载/Blob 导出、断网和暂存后杀进程恢复仍待实机验收。正式账号和保存/续写/GitHub 端到端须由用户使用或另行授权；本轮没有创建生产 Memo 或 GitHub 笔记提交。
+- 本轮未改 Web 前端、服务端、数据库、生产凭据或 CI/CD；未执行与 Android 无关的 Ignis 官方运行资源浏览器回归，也未重复 Memos 全量已有失败测试。没有提交、推送、生产部署或公开发布；现有线上服务没有改变。
+
 验证日期：2026-09-20；2026-09-21 收尾核对。以下结果针对真实 Ignis / Obsidian 集成，替代此前独立 React 原型的验收记录。
 
 ## 实际执行结果
