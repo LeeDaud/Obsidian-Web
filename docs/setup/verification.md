@@ -318,3 +318,64 @@ CI/CD、生产部署、HTTPS、服务器系统服务均未新增或启用。Obsi
 - 使用本机 Chrome 访问正式 HTTPS 原版 Memos，390×844px 移动视口，登录 token 只在进程内存中传递。页面实际出现“已投递”，所属 DOM 位于 `memo-header-meta` 时间戳区域；可见笔记查询合并为 1 次请求。
 - 等待三点菜单挂载后核验：已投递笔记有“续写”菜单项，没有“投递到 Obsidian”。真实编辑器的记录类型为 2 个等宽按钮，整行占满，触控高度至少 44px。页面无横向溢出，pageerror=0，提交/创建/更新请求=0。
 - 本轮原版页面的状态/菜单/布局验收成功，不再沿用上一轮因公网超时未完成的结论。原笔记更新和关联续写仍由本地行为测试核验；生产只读检查没有实际保存、创建或重投内容，手机硬件与电脑逐条接收仍待真实使用。
+# 2026-10-09 草稿恢复、损坏缓存与附件 Range 修复
+
+- 已消费草稿在原生落盘前按编辑 changeToken 拦截迟到回放，保留精确 localStorage 消费值；新 token 的相同正文仍允许暂存。保存前写完整 Draft 检查点和待消费值，恢复时核对正文、附件、父引用、多引用、位置、分组和时间，不能仅凭正文相同消除草稿。无 Room schema 迁移，旧无检查点条目保留而非猜测已保存。
+- 离线列表逐条核验，损坏索引/附件不阻断其他独立已核验记录；损坏文件不删除，直接 load 仍失败。合成回归保留两个账号隔离及坏索引文件证据；未读取真实历史。
+- 附件增加单范围206/范围边界检查和终点受限流，保留 sandbox/nosniff/no-store。真实设备初次测试暴露双重偏移（请求2–4但正文只剩4），因此改为由 Chromium 进行初始 seek，流在初始available报告原文件大小、读取只到所请求终点。依据 [Chromium InputStreamReader](https://raw.githubusercontent.com/chromium/chromium/main/components/embedder_support/android/util/input_stream_reader.cc) 与实际124行为；不把普通HTTP切片实现直接当成 WebView 流契约。
+- 最终 `testDebugUnitTest lintDebug assembleDebug` 成功：62 项测试零失败；TypeScript通过，Lint0错误/18警告。新增草稿迟到/新输入、完整保存检查点、损坏缓存隔离及range边界测试；既有58项保留。API35真实 WebView 用原附件输入导入合成10字节文件、暂存/保存后读取2–4、后3字节、8起、首字节、超出终点范围，全部206且正文/Content-Range准确，pageerror=0。编辑、任务、双击、表格/公式/Mermaid再次通过。
+- 最终主APK 0.4.0-preview2 / versionCode6，16,566,145 bytes，SHA-256 `b9e3ea22c16b2c2038412e27f8d52e626069402e89bd0c982a649c39a2820865`，签名核验通过；346项本地资产与构建清单逐项一致，增量许可证存在。默认入口仍未切换，显式Debug预览可用。后续构建改变hash时以新记录为准。
+- ss-review仍为Needs Improvement（整体）：本次不重绘原组件；改用普通viewport截图，目视表格/公式/代码/Mermaid/脚注不重叠，原操作保持布局。深色、完整逐页、权限、真实音视频播放/拖动与所有格式仍待验收；启动立即附加Playwright时的页面关闭仍偶发，稍后完整回归通过，不宣称生命周期压力已完成。
+- 审批服务曾短暂额度耗尽，首次清理未执行；随后恢复并正常获批测试。没有绕过审批、提交推送、部署、删除文件、真实账号/仓库写入或CI/CD改动。
+
+# 2026-10-09 原组件候选继续迁移与设备验证
+
+- 当前候选已接入原工具栏/编辑器/阅读器、附件私有分块上传、元数据、全部本机 CEL 筛选排序、多引用/反向关系、本机分组、个人偏好、原生保存/分享/权限、账号管理及首页远端合流。完整能力与未闭环范围见 android-web-parity；不以接口已接入等同设备验收完成。
+- 修复：原 Connect Request 请求体适配；保存后草稿消费回执与幂等重试；原动态照片和媒体元数据传递；同秒多笔记 Markdown 导出采用不占用其他原时间戳的唯一文件名，不修改原记录时间或投递路径。旧 Compose 回归测试明确挂载旧界面，不冒充新入口验证。
+- 安全：远端 Memo 投影改为已知展示字段白名单，合成未知字段/token 不进入页面；身份与附件资源按账号隔离，冻结记录拒绝正文更新。APK 按当前资产清单与源 hash 命名空间打包，旧资源留在忽略 build 但不混入包；构建生成实际依赖许可证。Room schema、生产源码、凭据与 CI/CD 未变。
+- 最终 `testDebugUnitTest lintDebug assembleDebug assembleQa` 成功，58 项测试零失败；Lint 0 错误/18 警告。候选 TypeScript 无输出通过，CEL 8 项断言通过。原组件浏览器320/390/430：短卡102px、正文24px，无横向溢出、pageerror=0，输入不创建记录，显式保存才调用 CreateMemo。Vite 保留既有 highlight/CSS 与大 chunk 警告。
+- API35 / WebView124 已实际运行原组件，不再沿用 API26 无 provider 的限制作为现代设备未测试结论。隔离 emulator-5558，仅合成数据、无账号/投递配置，实际通过输入/暂存/保存/任务勾选/双击编辑，以及表格、KaTeX、代码块、Mermaid SVG。原画廊图片加载也已实测。最终版本再次安装、显式预览启动并重跑通过，报告 `app/build/android-qa/local-ui/android35/result.json`。首次启动立即附加 Playwright 曾遇页面关闭，App PID 仍在，稍后重跑通过；启动重载/生命周期压力矩阵尚未完成，不宣称此竞态已彻底修复。
+- APK 为 0.4.0-preview2 / versionCode6，15,963,859 bytes，SHA-256 `da9fdf35630fb2d3809e5910d7301ac39b25d370653cfe56087c3af841518b31`，apksigner verify 通过。默认入口仍为保留原生界面；Debug 的 `local-ui-preview=true` 开启本地原组件。曾临时启用默认本地入口验证通过，但完整验收门槛未满足，因此最终包恢复显式预览，不提前发布正式0.4.0。
+- ss-review 为 Needs Improvement：新增适配没有重绘原组件，三宽度短卡与实际设备格式目视检查通过。设备完整截图可能受 Playwright fullPage 滚动合成影响，不拿合成图重复区域当作最终逐像素结果；完整系统栏/IME/深色/权限与逐页比对仍待完成。
+- 未闭环：最低WebView111、录音/定位/系统保存取消、音视频seek、受信iframe（CSP仍禁用）、大消息/磁盘失败/强杀恢复、缓存损坏回退、完整导入元数据往返及所有格式逐页矩阵。评论/反应/服务器管理等仍为已确认个人范围之外。真实 Memos 登录、真实 GitHub 写入及手机硬件未执行，无提交推送或生产部署。
+
+# 2026-10-09 原 Web 组件本地复用第一阶段
+
+- 授权：用户“采用 / 开始实施”确认 R1–R4。新增 apps/android/local-ui/ 构建及 native LocalUiBackend/LocalWebView，复用固定原 main/router/React/CSS/CodeMirror/MemoMarkdownRenderer 及其懒加载模块，没有修改 upstream/memos 生产源码或 generated proto。旧原生/容器文件保留；默认入口尚未切换。
+- 构建：Gradle preBuild 已依赖 buildLocalUi；生成资源位于忽略的 app/build/generated/assets/local-ui，APK 已核验存在 assets/local-ui/index.html。使用原已安装依赖和 pnpm lock，不新增全局包。Vite 原组件构建通过；保留 ::highlight 解析和大 chunk 警告。emptyOutDir=false，不自动删除旧 hash；最终资源清单与大小控制尚待处理。
+- 类型检查：`node upstream/memos/web/node_modules/typescript/bin/tsc --project apps/android/local-ui/tsconfig.json --noEmit` 最终通过。开始检查暴露 pnpm 间接声明回落到根仓库不同版本的问题，独立候选配置对齐 router/query-core/lezer/leaflet/lodash/sanitize 的原已有声明路径及原全局类型，不修改上游代码。另行运行原上游 `tsc --noEmit --skipLibCheck` 仍失败（既有 router/testing-library 等声明解析），不把候选结果称为上游全量检查成功。
+- 桥接口：APK 私有 HTTPS origin `https://echo-app.local`，无 file/content 页面访问、无 addJavascriptInterface、无真实 token 响应。只交付主文档 WebMessagePort；跨源/目录遍历/未知命令拒绝。附件 URI 以资源 ID 查询核验，本机文件路径不进入 JS；附件不能获得 port，文件响应增加 sandbox CSP，防止同源 SVG/HTML 取得原生权限。原生侧后台串行调用；路径/命令/版本保护有合成测试，真实端口及大消息/导航生命周期仍待设备验证。设计依据为 [Android 主框架消息说明](https://developer.android.com/reference/android/webkit/WebView#postWebMessage(android.webkit.WebMessage,%20android.net.Uri))，不能仅凭 API 选择称为已完成安全验收。
+- 本机核心适配：原 Connect JSON 请求映射原生本机列表/正文保存/更新、单父引用和真实队列状态；更新携带本机 revision，冻结/旧版本拒绝覆盖。原 localStorage 结构化草稿镜像已有设备草稿及私有 local-ui-state 索引，清除写停用标记而非删除文件；输入不生成正式笔记或调度投递。原服务协议、Room schema、GitHub 队列格式不变。草稿与正式保存间的失败原子性、权限与附件完整生命周期尚待补齐，不能宣称 W2 全部完成。
+- 浏览器实际运行：`node --import tsx apps/android/local-ui/verify.ts` 通过。原构建页面 + 合成 MessageChannel/native response，未使用真实账号/笔记。320/390/430 均无横向溢出；原组件短卡片 102px/正文24px，与 Web 基准坐标一致。表格、KaTeX 公式、脚注真实 DOM 通过；输入后没有 CreateMemo，点击保存后才创建，并观测 local.draft/local.clear-draft。页面错误 0。测试中首次暴露 Connect fetch 使用 Request 而非仅 init 的真实接口差异，已修复后重跑。
+- 合成截图/报告：build/android-qa/local-ui/original-local-home-{320,390,430}.png、browser-verification.json。已等待 KaTeX 加载后截图，不把懒加载占位当最终格式。测试拦截了本机安全软件注入的外部脚本；没有关闭或修改安全软件/系统配置。其注入引起的 CSP 诊断与 App 自身策略区分记录，不开放外部脚本绕过。
+- 原生检查：`./gradlew.bat --offline --no-daemon assembleDebug assembleQa testDebugUnitTest lintDebug` 最终成功，50 项本地测试 0 失败，新增5项核心适配测试验证无凭据 bootstrap/无队列、原格式保存与乐观更新、草稿不入队及停用后不复活、冻结保护、未知命令及文件/文档路径隔离。Lint 0 错误/18 项警告（包括新 JavaScript/自定义 View 审查项），未宣称全部既有或无风险。
+- 设备限制：隔离 API26 `dumpsys webviewupdate` 实测 Current WebView package=null、Any WebView package installed=false。显式 local-ui-preview 启动已验证显示兼容性提示和返回本机按钮，而非崩溃/空白；compat.xml 留存在合成目录。没有安装系统 WebView、改系统 provider 或访问真机私人数据。候选设置 Chromium111+ 下限来自 [原 Tailwind v4 兼容性要求](https://tailwindcss.com/docs/compatibility)，但 App 的实际最低内核及原组件功能仍需现代 WebView 设备测试。本机提示不等于新页面已在设备运行通过。
+- 本轮 ss-review：Needs Improvement。可视页面直接复用原组件、主题、语义控件和响应式布局，三宽度短卡片已实测；原版优先于通用风格改写。Android 安全区与不支持内核保护已实现，但深色/IME/键盘/权限/完整功能及逐页截图仍未闭环。
+- 阶段 APK：0.4.0-preview / versionCode5，app/build/outputs/apk/debug/app-debug.apk，17,367,235 bytes，SHA-256 `14794e2a184689481c4c3d47bd9cf20ec32e1b957c733eae4ce5d5cc94426b23`；签名验证通过，沿用 `58e970ab2519ab99db7fd717fb70d0eba1215c7e834d932860b0d452e7eee174`。仅 Debug 的显式 local-ui-preview 参数可打开候选，默认仍旧已验收入口；不是完整迁移交付包，避免让未适配接口替代已有可用功能。
+- 未完成：附件选择/上传、录音/位置、筛选全集、多引用/导出、原生设备配置与 Memos 合流/离线、完整投递操作、WebView 主框架/导航/大消息/故障恢复、现代设备实际运行、资源/许可证清单和完整视觉矩阵。未知调用显式失败，不伪造原服务成功。W2–W5 保留待办；无生产改动、实际账号/仓库联调、数据库迁移、源码提交推送或 CI/CD 修改。
+
+# 2026-10-09 Android 首页合流与短卡片修复
+
+- 用户确认“首页统一显示原 Memos 与本机笔记，保留远端只读边界，修正短卡片留白，本机双击沿用投递状态规则”，实施中再次要求原 Web 1:1。取消独立历史导航，账号连接/刷新/退出在设置，登录后返回首页；首页/所有笔记/归档合流显示，两种源以各自身份去重并按置顶/时间排序。不按正文合并、不导入 Room、不修改服务器原笔记或原投递队列。
+- 远端时间戳/三点打开只读详情，离线保存与另存草稿保留；双击正文创建仅附原 URL 的本机新续写草稿，不复制原全文，不伪造本机父投递回执。本机原编辑/续写规则不变。退出隐藏远端记录与详情，不隐藏已独立另存的本机草稿。分类切换等待正在进行的读取结束后按需刷新，防止读取归档后首页未切回；读取失败不循环发请求。
+- 已实际运行原 Web 固定上游及 apps/android/web-reference.ts，用原 React/CodeMirror/MemoView 组件和合成 Connect 响应截取基准。仅 localhost，外部请求拦截；无生产账号、私人历史、服务器写入或部署。使用已有系统 Chrome，不安装新浏览器。原页面 pageerror 数为 0。
+- 实测 `web-short-measurements.json`：320/390/430 均无横向溢出；单行卡片高 102px，正文 24px；Web 内边距上下 12px/左右 16px，加 1px 边框，正文顶部相对卡片 65px、底部 13px。原源码为 MemoView/constants.ts、MemoContent/index.tsx 的 leading-6。原生正文改为完整 24sp 行盒（TextView lineSpacing 原来不为末行保留同等空间），段落分隔仍为 8px；空正文不生成额外占位，移除无内容的首页来源提示占位。正文颜色按原 MemoContent 的 foreground 显式覆写而非继承 card-foreground。
+- 最终执行 `./gradlew.bat --offline --no-daemon assembleDebug assembleQa testDebugUnitTest assembleQaAndroidTest lintDebug` 成功，45 项本地测试 0 失败；新增 4 项合流测试覆盖来源身份不混淆、重复远端 UID、非本人拒绝、置顶排序、退出隐藏缓存、离线完成快照、归档隔离与账号 key。Lint 0 错误/11 项既有警告。
+- 最终隔离 API 26 QA 包运行 UnifiedHomeTest、MemosAccountTest、MemosInteractionTest、MemosVisualTest 共 5 项通过。验证首页同时出现两种来源、远端单行正文 24dp/底部 13dp、详情入口、双击空白来源续写、原正式笔记/队列不变、独立历史导航不存在、设置登录入口，以及既有编辑/菜单/日历/浅深色回归。首轮失败为设备截图 API 在逻辑尺寸覆写时返回 null，以及测试等待条件误匹配旧合成草稿；截图加入系统 screencap 回退，测试等待新 ID，最终全量重跑通过。
+- 最终使用项目忽略 build/android-qa 内 AVD 的 432x932 物理画面（density 160，无 wm size 覆写），320/390/430 内容宽度分别截图，避免物理390/逻辑432导致画面缩放。原 Web 六张 `ui-reference/web-short-{light,dark}-{width}.png`，App 六张 `unified-home-{light,dark}-{width}.png`。目视核查标准浅色和小屏深色的卡片/正文/边框及换行；其余宽度由设备尺寸断言与截图留存。系统栏不计入 Web 内容区域比较。
+- 本轮 ss-review：Needs Improvement（整体 1:1 未完成）。新增账号/来源/返回入口使用既有语义主题和 Lucide，主操作至少44dp；原 quiet 24dp 三点沿用 Web 特例。单行卡片尺寸通过，但原组件/字体栅格化、完整 Markdown、附件与多段/菜单逐像素矩阵仍未闭环。远端来源标为 Memos，不假装有本机 GitHub 回执；本机草稿状态文案按本机数据语义保留。这些不能称为与 Web 所有细节完全一致。
+- APK 0.3.1 / versionCode 4，路径 `apps/android/app/build/outputs/apk/debug/app-debug.apk`，SHA-256 `75f9ab09d5eddc5ab48d8bacd293a64dbf0077ea8ca024a19a531e68c663bebf`，签名验证通过，沿用调试证书 `58e970ab2519ab99db7fd717fb70d0eba1215c7e834d932860b0d452e7eee174`。不卸载、不清数据，可同签名覆盖。真实账号需用户在 App 内验收。CI/CD、生产服务、Room schema、真实笔记、提交推送不变。
+- 完整 R1–R4 本地原 Web 组件复用仍等待独立确认；已向用户询问是否将再次提出的 1:1 要求同时确认成此渲染层切换。当前 APK 为首页/短卡片修复包，不作为全功能/完整 1:1 最终验收。
+
+# 2026-10-09 Android Memos 只读历史接入
+
+- 授权：用户确认 plan 的可选账号/只读历史/显式离线方案并回复“实施”。本轮没有请求真实 Memos 服务、读取私人历史、生产写入/部署、Room 迁移、Git 提交推送或 CI/CD 修改。
+- 实现：独立 memos/ 客户端、Android Keystore + AES-GCM 会话；仅认证三个 POST，其余限定 GET。HTTPS 单实例、不跟随重定向；读取核验登录身份和 memo/附件归属。正常/归档分页；缓存按实例/账号/UID/规范化源版本分区，原子索引仅在全部附件与最终源版本核验完成后推进。
+- 入口：侧栏“Memos 历史”、设置“连接原 Memos”；离线保存不入队。另存创建新设备草稿，保留原 Markdown、复制附件、附来源 URL；不修改原 Memos，不冒充已投递父笔记，不调用 enqueue 或 worker。
+- 构建命令：在 apps/android 使用现有 JDK 21/SDK 执行 `./gradlew.bat --offline --no-daemon assembleDebug assembleQa testDebugUnitTest assembleQaAndroidTest lintDebug`，最终成功。41 项测试通过，0 失败；Lint 0 错误、11 项既有警告。首轮暴露新增图标不存在，次轮暴露 JSONObject.quote 的斜线转义不适合 CEL；两项已修复后全量重跑通过。
+- 新增 10 项 Robolectric 合成测试：HTTPS/资源标识与账号范围、跨账号拒绝、登录后身份核验与密码不持久化、正常/归档分页参数、完整附件缓存与摘要损坏检测、下载中断不生成回执、源版本变化不推进、禁止写接口、刷新轮换与身份核验、失败保留已核验旧版本。传输为注入式 mock，不代表真实网络/实际 Memos 版本兼容已验证。
+- 隔离 API 26 模拟器 emulator-5556、QA 包：MemosAccountTest + MemosInteractionTest + MemosVisualTest 共 4 项通过；增加另存草稿/截图断言后 MemosAccountTest 再次通过。验证真实 Keystore 密文不含合成 access/refresh 明文、断开后不恢复、无需登录入口可达、复制后的草稿新 ID/来源 URL/无伪造父关系、正式笔记及任务列表不变。既有交互/浅深色与侧栏回归通过。未清除设备或用户数据，仅安装 QA 包并使用合成内容。
+- 截图位于忽略的 `apps/android/app/build/android-qa/memos-login-320.png` 与 `memos-login-390.png`。已目视检查状态栏留白、表单、按钮和中文无横向溢出。截图底部包含操作 Toast；不将 Toast 或系统栏算作表单区域差异。
+- 本轮 ss-review：新增登录表单及账号控件为 Pass（局部审查），采用既有 Memos 语义主题与 Lucide 资源，输入有标签、密码隐藏、44dp 操作区、选中 Tab 语义、附件名称省略并独立图标操作、详情操作垂直排列防小屏溢出，图片延迟降采样。React/Tailwind 项不适用，原 Web 风格优先。完整登录后详情、430px/大字号/当前 API 与真机视觉仍未闭环，不将局部 Pass 扩大为整个 App 与 Web 一模一样。
+- APK：`apps/android/app/build/outputs/apk/debug/app-debug.apk`，0.3.0 / versionCode 3；SHA-256 `1308145172d5e375ddd3cb5a5f054cfc406618b06d460610879539ab521dabf4`。apksigner verify 成功，沿用既有 Android Debug 证书，SHA-256 `58e970ab2519ab99db7fd717fb70d0eba1215c7e834d932860b0d452e7eee174`。同签名覆盖安装，不建议卸载。
+- 限制：仅用户名/密码；SSO 未适配。外链附件不下载，超限/归属不明不会标记完整离线。离线缓存并非全库加密；断开隐藏但不删除。远端内嵌图片链接在原 Markdown 中保留，复制附件不代表内嵌引用已完整重写。此前已被清理或仅在 GitHub/电脑的历史不会自动恢复。完整原 Web 渲染 R1–R4 仍待单独确认；真实账号由用户在 App 内登录验收。

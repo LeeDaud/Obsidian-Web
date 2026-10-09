@@ -19,13 +19,29 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.ui.platform.LocalContext
+import xyz.leedaud.echo.memos.*
+import java.time.Instant
+
+internal data class FeedEntry(val key: String, val local: Note? = null, val remote: MemosMemo? = null) {
+    val created: Long get() = local?.created ?: runCatching { Instant.parse(remote!!.created).toEpochMilli() }.getOrDefault(0)
+    val pinned: Boolean get() = local?.pinned ?: org.json.JSONObject(remote!!.raw).optBoolean("pinned")
+}
+internal fun unifiedFeed(notes: List<Note>, history: MemosState, archived: Boolean): List<FeedEntry> {
+    val account = history.account
+    val remote = if (account == null) emptyList() else (if (history.offline) history.cached.map { it.memo } else history.items)
+        .filter { it.creator == account.user && it.archived == archived }.distinctBy { it.name }
+    return (notes.map { FeedEntry("local:${it.id}", local = it) } + remote.map { FeedEntry("memos:${account!!.scope}:${it.name}", remote = it) })
+        .sortedWith(compareByDescending<FeedEntry> { it.pinned }.thenByDescending { it.created }.thenBy { it.key })
+}
 
 @Composable internal fun NoteList(state: UiState, model: NoteViewModel, detail: (Note) -> Unit, edit: (Note) -> Unit,
-    openDraft: (Draft) -> Unit, page: String, query: String, changeQuery: (String) -> Unit, notify: (String) -> Unit) {
+    openDraft: (Draft) -> Unit, page: String, query: String, changeQuery: (String) -> Unit, notify: (String) -> Unit,
+    history: MemosState = MemosState(), remoteDetail: (MemosMemo) -> Unit = {}, continuation: (MemosMemo) -> Unit = {}, more: () -> Unit = {}) {
     var date by rememberSaveable(page) { mutableStateOf("") }
     val notes = state.notes.filter { it.archived == (page == "归档") && (page != "置顶" || it.pinned) && (page != "任务" || it.todo)
         && (page != "搜索" || query.isBlank() || if (Regex("\\d{4}-\\d{2}-\\d{2}").matches(query)) displayTime(it.created).startsWith(query) else it.body.contains(query, true))
         && (date.isBlank() || displayTime(it.created).startsWith(date)) }.sortedWith(compareByDescending<Note> { it.pinned }.thenByDescending { it.created })
+    val entries = unifiedFeed(notes, if (page in listOf("首页", "笔记", "归档")) history else MemosState(), page == "归档")
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
     LazyColumn(Modifier.widthIn(max = 672.dp).fillMaxSize().testTag("memo-feed"), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 32.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -48,16 +64,41 @@ import androidx.compose.ui.platform.LocalContext
             items(attachments, key = { it.id }) { attachment -> MemosCard { Attachments(listOf(attachment), model, notify) } }
             if (attachments.isEmpty()) item { EmptyMemos() }
         } else {
-            if (notes.isEmpty()) item { EmptyMemos() }
-            items(notes, key = { it.id }) { note ->
+            if (history.account != null && history.offline && page in listOf("首页", "笔记", "归档")) item {
+                Text("离线副本 · 不代表服务器最新版本", style = MaterialTheme.typography.bodySmall, color = LocalMemosPalette.current.mutedForeground)
+            }
+            if (entries.isEmpty()) item { EmptyMemos() }
+            items(entries, key = { it.key }) { entry ->
+                val note = entry.local
+                if (note == null) {
+                    RemoteMemoCard(entry.remote!!, history.offline, { remoteDetail(entry.remote) }, { continuation(entry.remote) })
+                } else
                 if (inlineNote?.id == note.id && page == "首页") {
                     // Edit in the original card's slot, as the web MemoView does.
                     Editor(state, model, notify)
                 } else MemoCard(note, state.jobs.find { it.noteId == note.id && it.revision == note.revision },
                     model, { detail(note) }, { edit(note) }, notify, state.notes, detail)
             }
+            if (page in listOf("首页", "笔记", "归档") && history.account != null && !history.offline && history.next.isNotBlank()) item {
+                MemosButton("读取下一页", "chevron-down", enabled = !history.busy, onClick = more)
+            }
         }
     }
+    }
+}
+
+@Composable internal fun RemoteMemoCard(memo: MemosMemo, offline: Boolean, detail: () -> Unit, continuation: () -> Unit) {
+    MemosCard(Modifier.testTag("remote-memo-${memo.name}")) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 44.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(runCatching { displayTime(Instant.parse(memo.created).toEpochMilli()).replace('-', '/') }.getOrDefault(memo.created),
+                style = MaterialTheme.typography.bodySmall, color = LocalMemosPalette.current.mutedForeground,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).clickable(onClick = detail).padding(vertical = 12.dp))
+            Text(if (offline) "离线副本" else "Memos", style = MaterialTheme.typography.bodySmall, color = LocalMemosPalette.current.mutedForeground)
+            MemosIconButton("ellipsis-vertical", "备忘录详情", Modifier.testTag("remote-detail-${memo.name}"), size = 24, onClick = detail)
+        }
+        if (memo.body.isNotBlank()) Column(Modifier.fillMaxWidth().testTag("remote-body-${memo.name}")) { MarkdownPreview(memo.body, continuation) }
+        if (memo.attachments.isNotEmpty()) Text("${memo.attachments.size} 个附件", style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.clickable(onClick = detail).heightIn(min = 44.dp).padding(vertical = 12.dp))
     }
 }
 
@@ -92,7 +133,7 @@ import androidx.compose.ui.platform.LocalContext
                 }
             }
         }
-        Column(Modifier.fillMaxWidth().testTag("memo-body-${note.id}")) { MarkdownPreview(note.body, edit) }
+        if (note.body.isNotBlank()) Column(Modifier.fillMaxWidth().testTag("memo-body-${note.id}")) { MarkdownPreview(note.body, edit) }
         Attachments(note.attachments, model, notify)
         note.location?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = LocalMemosPalette.current.mutedForeground) }
         NoteRelations(note, relatedNotes, openRelated)

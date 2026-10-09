@@ -108,6 +108,25 @@ try {
   const { readFile } = await import("node:fs/promises");
   await page.addStyleTag({ content: await readFile("upstream/memos/web/src/themes/default-dark.css", "utf8") });
   await page.screenshot({ path: `${out}/web-home-dark-390.png`, fullPage: true });
+  memos[0].content = "原文短记录";
+  memos[1].content = "短笔记";
+  const shortCards = [];
+  for (const dark of [false, true]) for (const width of [320, 390, 430]) {
+    await page.goto(origin, { waitUntil: "networkidle" });
+    await page.setViewportSize({ width, height: 932 });
+    if (dark) await page.addStyleTag({ content: await readFile("upstream/memos/web/src/themes/default-dark.css", "utf8") });
+    await page.locator('[data-memo-name="memos/saved"]').waitFor();
+    shortCards.push(await page.evaluate(() => {
+      const body = document.querySelector('[data-memo-name="memos/saved"]')!;
+      const card = body.closest("article")!;
+      const style = getComputedStyle(card);
+      return { width: innerWidth, card: card.getBoundingClientRect().toJSON(), body: body.getBoundingClientRect().toJSON(),
+        padding: [style.paddingTop, style.paddingBottom, style.paddingLeft, style.paddingRight], lineHeight: getComputedStyle(body).lineHeight,
+        border: style.borderColor, overflow: document.documentElement.scrollWidth > innerWidth };
+    }));
+    await page.screenshot({ path: `${out}/web-short-${dark ? "dark" : "light"}-${width}.png`, fullPage: true });
+  }
+  await writeFile(`${out}/web-short-measurements.json`, JSON.stringify(shortCards, null, 2));
   await writeFile(`${out}/web-measurements.json`, JSON.stringify({ measurements, errors, requests }, null, 2));
   console.log(JSON.stringify({ out, measurements, errors }));
 } finally { await browser.close(); }

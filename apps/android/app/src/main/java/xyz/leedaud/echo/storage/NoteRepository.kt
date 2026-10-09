@@ -63,7 +63,7 @@ class NoteRepository(val root: File, val database: EchoDatabase) {
         }
         return select(cached?.takeIf { it.baseRevision == current.revision && !savedPlaceholder } ?: Draft(current.id, current.parentId,
             current.body, current.todo, current.attachments, current.location, current.created,
-            (cached?.generation ?: 0) + 1, current.revision))
+            (cached?.generation ?: 0) + 1, current.revision, current.referenceIds, current.spaceName))
     }
     @Synchronized fun saveDraft(draft: Draft): Boolean {
         var accepted = false
@@ -77,7 +77,7 @@ class NoteRepository(val root: File, val database: EchoDatabase) {
         return accepted
     }
 
-    @Synchronized fun save(draft: Draft): Note? {
+    @Synchronized fun save(draft: Draft, authorizeDelivery: Boolean = true): Note? {
         saveDraft(draft)
         if (draft.body.isBlank() && draft.attachments.isEmpty()) return null
         NoteFormat.validate(draft.body, draft.attachments)
@@ -86,16 +86,19 @@ class NoteRepository(val root: File, val database: EchoDatabase) {
         require(previous?.frozen != true) { "原笔记已入队，请创建关联续写" }
         require(previous == null || previous.revision == draft.baseRevision) { "原版本已变化，草稿保留，请重新打开" }
         if (previous != null && previous.body == draft.body && previous.todo == draft.todo
-            && previous.attachments == draft.attachments && previous.location == draft.location) return previous
+            && previous.attachments == draft.attachments && previous.location == draft.location
+            && previous.referenceIds.orEmpty() == draft.referenceIds.orEmpty() && previous.spaceName == draft.spaceName
+            && previous.created == draft.created && (draft.updatedOverride == null || previous.updated == draft.updatedOverride)) return previous
         val revision = (previous?.revision ?: 0) + 1
-        val configured = target()?.takeIf { it.enabled }
+        val configured = target()?.takeIf { it.enabled && authorizeDelivery }
         if (configured != null && draft.parentId != null) {
             val parent = deliveries().lastOrNull { it.noteId == draft.parentId }
             require(parent != null && parent.target.id == configured.id) { "父笔记尚未投递到当前目标，请先投递父笔记" }
         }
-        val provisional = Note(draft.id, previous?.created ?: draft.created, System.currentTimeMillis(), revision,
+        val provisional = Note(draft.id, draft.created, draft.updatedOverride ?: System.currentTimeMillis(), revision,
             draft.body, draft.todo, draft.attachments, draft.parentId, draft.location,
-            "notes/${draft.id}/$revision.md", "", configured != null, previous?.pinned ?: false, previous?.archived ?: false)
+            "notes/${draft.id}/$revision.md", "", configured != null, previous?.pinned ?: false, previous?.archived ?: false,
+            referenceIds = draft.referenceIds, spaceName = draft.spaceName)
         val markdown = NoteFormat.markdown(provisional, "00_Inbox/${timestamp(provisional.created)}.md")
         val note = provisional.copy(sha256 = digest(markdown.toByteArray(Charsets.UTF_8)))
         val delivery = configured?.let { Delivery("${note.id}-${note.revision}", note.id, note.revision, it, note) }
@@ -151,7 +154,7 @@ class NoteRepository(val root: File, val database: EchoDatabase) {
     @Synchronized fun updateNote(note: Note) {
         val current = find("note", note.id, Note::class.java) ?: error("笔记不存在")
         if (note.deleted) require(deliveries().none { it.noteId == note.id && it.state != "verified" }) { "投递尚未确认，请先保留笔记" }
-        put("note", note.id, current.copy(pinned = note.pinned, archived = note.archived, deleted = note.deleted))
+        put("note", note.id, current.copy(pinned = note.pinned, archived = note.archived, deleted = note.deleted, spaceName = note.spaceName))
     }
 
     fun verifyAttachment(attachment: AttachmentRef) {
@@ -192,9 +195,12 @@ class NoteRepository(val root: File, val database: EchoDatabase) {
     fun bundle(note: Note, path: String, parentPath: String?): List<DeliveryFile> {
         require(digest(file(note.file).readBytes()) == note.sha256 &&
             digest(NoteFormat.markdown(note, "00_Inbox/${timestamp(note.created)}.md").toByteArray(Charsets.UTF_8)) == note.sha256) { "正式 Markdown 与本地索引不一致，停止投递" }
-        val text = NoteFormat.markdown(note, path, parentPath).toByteArray(Charsets.UTF_8)
         val names = NoteFormat.attachmentPaths(note.attachments, path.substringAfter('/').removeSuffix(".md"))
-        return listOf(DeliveryFile(path, Base64.getEncoder().encodeToString(text), digest(text))) + note.attachments.map {
+        val references = note.referenceIds.orEmpty().mapNotNull { id ->
+            deliveries().find { it.noteId == id && it.state == "verified" && it.target.id == target()?.id }?.receipt?.path?.let { id to it }
+        }.toMap()
+        val referencedText = NoteFormat.markdown(note, path, parentPath, references).toByteArray(Charsets.UTF_8)
+        return listOf(DeliveryFile(path, Base64.getEncoder().encodeToString(referencedText), digest(referencedText))) + note.attachments.map {
             verifyAttachment(it)
             val bytes = file(it.file).readBytes()
             DeliveryFile(names.getValue(it.id), Base64.getEncoder().encodeToString(bytes), digest(bytes))

@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tiles.openfreemap.org https://tile.openstreetmap.org; media-src 'self' blob:; font-src 'self' data:; connect-src 'self' https://tiles.openfreemap.org https://nominatim.openstreetmap.org; worker-src 'self' blob:; frame-src 'none'; child-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';" />
+    <link rel="icon" type="image/webp" href="/logo.webp" />
+    <title>Memos</title>
+  </head>
+  <body class="text-base w-full min-h-svh">
+    <div id="root" class="relative w-full min-h-full"></div>
+    <script type="module" src="/src/entry.ts"></script>
+  </body>
+</html>

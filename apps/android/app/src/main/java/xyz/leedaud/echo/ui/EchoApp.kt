@@ -65,6 +65,7 @@ import io.noties.markwon.ext.tasklist.TaskListPlugin
 import io.noties.markwon.ext.strikethrough.StrikethroughPlugin
 import kotlinx.coroutines.*
 import xyz.leedaud.echo.notes.*
+import xyz.leedaud.echo.memos.*
 import java.io.File
 import java.time.LocalDate
 import java.time.YearMonth
@@ -73,13 +74,16 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun EchoApp(model: NoteViewModel) {
+@Composable fun EchoApp(model: NoteViewModel, memos: MemosViewModel, initialPage: String = "首页") {
     val state by model.state.collectAsStateWithLifecycle()
-    var page by rememberSaveable { mutableStateOf("首页") }
+    val history by memos.state.collectAsStateWithLifecycle()
+    var page by rememberSaveable { mutableStateOf(initialPage) }
     var query by rememberSaveable { mutableStateOf("") }
     var searchOpen by rememberSaveable { mutableStateOf(false) }
     var theme by rememberSaveable { mutableStateOf("系统") }
     var detail by remember { mutableStateOf<Note?>(null) }
+    var remoteDetail by remember(history.account?.scope) { mutableStateOf<MemosMemo?>(null) }
+    var fetchedRoute by remember { mutableStateOf<String?>(null) }
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -90,13 +94,21 @@ import java.util.zip.ZipOutputStream
     }
     val owner = LocalLifecycleOwner.current
     LaunchedEffect(state.message, state.ready) { if (state.ready) state.message?.let { notify(it); model.dismissMessage() } }
+    LaunchedEffect(history.message, history.ready) { if (history.ready) history.message?.let { notify(it); memos.dismissMessage() } }
     DisposableEffect(Unit) { onDispose { toast?.cancel() } }
     LaunchedEffect(state.ready, owner) {
         if (state.ready) owner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             while (isActive) { delay(4000); model.refreshStatuses() }
         }
     }
-    fun go(next: String) { model.stash(); detail = null; page = next; scope.launch { drawer.close() } }
+    fun go(next: String) { model.stash(); detail = null; remoteDetail = null; page = next; scope.launch { drawer.close() } }
+    LaunchedEffect(history.ready, history.account?.scope, page, history.busy) {
+        if (history.account == null) fetchedRoute = null
+        val route = "${history.account?.scope}/${page == "归档"}"
+        if (history.ready && history.account != null && !history.busy && page in listOf("首页", "笔记", "归档") && fetchedRoute != route) {
+            fetchedRoute = route; memos.refresh(page == "归档")
+        }
+    }
     MemosTheme(dark = theme == "深色" || (theme == "系统" && isSystemInDarkTheme())) {
         ModalNavigationDrawer(drawerState = drawer, drawerContent = {
             BoxWithConstraints {
@@ -109,21 +121,28 @@ import java.util.zip.ZipOutputStream
         }) {
         BackHandler(enabled = drawer.isOpen) { scope.launch { drawer.close() } }
         Scaffold(modifier = Modifier.fillMaxSize().imePadding(), containerColor = MaterialTheme.colorScheme.background,
-            topBar = { MemosHeader(detail != null, { scope.launch { drawer.open() } }, { detail = null }) }) { padding ->
+            topBar = { MemosHeader(detail != null || remoteDetail != null || page in listOf("Memos 账号", "Memos 历史"),
+                { scope.launch { drawer.open() } }, { if (detail == null && remoteDetail == null) go("设置") else { detail = null; remoteDetail = null } }) }) { padding ->
             Box(Modifier.padding(padding).fillMaxSize()) {
                 if (!state.ready) {
                     Column(Modifier.padding(24.dp)) {
                         Text("正在恢复本机记录…")
                         state.message?.let { Text(it); TextButton(onClick = { model.initialize() }, enabled = !state.busy) { Text("重试恢复") } }
                     }
+                } else if (remoteDetail != null && history.account != null) {
+                    MemosHistoryPage(history, memos, { cached, origin -> model.adoptMemosCopy(cached, origin); remoteDetail = null; detail = null; page = "首页" },
+                        initialMemo = remoteDetail, back = { remoteDetail = null })
                 } else if (detail != null) {
                     val note = state.notes.find { it.id == detail!!.id } ?: detail!!
                     BackHandler { detail = null }
                     NoteDetail(note, state, model, { detail = null; model.edit(note); page = "首页" }, ::notify, { detail = it })
                 } else when (page) {
-                    "设置" -> Settings(state, model, theme) { theme = it }
+                    "Memos 账号", "Memos 历史" -> MemosHistoryPage(history, memos, { cached, origin -> model.adoptMemosCopy(cached, origin); remoteDetail = null; detail = null; page = "首页" }, onConnected = { go("首页") }, back = { go("设置") })
+                    "设置" -> Settings(state, model, theme, { go("Memos 账号") }) { theme = it }
                     else -> NoteList(state, model, { detail = it }, { model.edit(it); page = "首页" },
-                        { model.openDraft(it); page = "首页" }, page, query, { query = it }, ::notify)
+                        { model.openDraft(it); page = "首页" }, page, query, { query = it }, ::notify, history,
+                        { remoteDetail = it }, { memo -> history.account?.let { model.continueMemos(memo, it.origin); page = "首页" } },
+                        { memos.refresh(page == "归档", more = true) })
                 }
             }
         }
@@ -432,7 +451,7 @@ internal fun deliveryLabel(job: Delivery?): String = when {
                     }
                 }
             }
-            MarkdownPreview(note.body)
+            if (note.body.isNotBlank()) MarkdownPreview(note.body)
             Attachments(note.attachments, model, notify)
             note.location?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = p.mutedForeground) }
             NoteRelations(note, state.notes, open)
@@ -494,7 +513,7 @@ internal fun deliveryLabel(job: Delivery?): String = when {
 
 @Composable internal fun MarkdownPreview(text: String, onDoubleTap: (() -> Unit)? = null) {
     val colors = MaterialTheme.colorScheme
-    val foreground = LocalContentColor.current
+    val foreground = LocalMemosPalette.current.foreground
     val context = LocalContext.current
     val doubleTap by rememberUpdatedState(onDoubleTap)
     val renderer = remember(context) {
@@ -511,7 +530,7 @@ internal fun deliveryLabel(job: Delivery?): String = when {
             }).build()
     }
     AndroidView(factory = { context -> MemoTextView(context).apply {
-        textSize = 16f; includeFontPadding = false; setLineSpacing(0f, 1.5f); setTextIsSelectable(true)
+        textSize = 16f; includeFontPadding = false; setLineSpacing(0f, 1f); setTextIsSelectable(true)
         val detector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDoubleTap(event: MotionEvent): Boolean {
                 val offset = getOffsetForPosition(event.x, event.y)
@@ -533,6 +552,14 @@ internal fun deliveryLabel(job: Delivery?): String = when {
         view.setLinkTextColor(colors.primary.toArgbCompat())
         if (view.tag != text) {
             val rendered = SpannableStringBuilder(renderer.toMarkdown(text))
+            // CSS line-height also reserves space for the final line; TextView lineSpacing does not.
+            rendered.setSpan(object : LineHeightSpan {
+                override fun chooseHeight(text: CharSequence, start: Int, end: Int, spanstartv: Int, v: Int, fm: android.graphics.Paint.FontMetricsInt) {
+                    val lineHeight = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 24f, view.resources.displayMetrics).toInt()
+                    val extra = (lineHeight - (fm.descent - fm.ascent)).coerceAtLeast(0)
+                    fm.ascent -= extra / 2; fm.descent += extra - extra / 2; fm.top = fm.ascent; fm.bottom = fm.descent
+                }
+            }, 0, rendered.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             // CommonMark's empty separator line should match the web's 8px paragraph gap.
             Regex("\n\n").findAll(rendered).forEach { match ->
                 rendered.setSpan(object : LineHeightSpan {
@@ -551,7 +578,7 @@ private class MemoTextView(context: Context) : TextView(context) {
 }
 private fun Color.toArgbCompat(): Int = android.graphics.Color.argb((alpha * 255).toInt(), (red * 255).toInt(), (green * 255).toInt(), (blue * 255).toInt())
 
-@Composable private fun Settings(state: UiState, model: NoteViewModel, theme: String, setTheme: (String) -> Unit) {
+@Composable private fun Settings(state: UiState, model: NoteViewModel, theme: String, connectMemos: () -> Unit, setTheme: (String) -> Unit) {
     var owner by remember(state.target?.id) { mutableStateOf(state.target?.owner ?: "") }
     var repo by remember(state.target?.id) { mutableStateOf(state.target?.repo ?: "") }
     var branch by remember(state.target?.id) { mutableStateOf(state.target?.branch ?: "main") }
@@ -559,6 +586,7 @@ private fun Color.toArgbCompat(): Int = android.graphics.Color.argb((alpha * 255
     var enabled by remember(state.target?.enabled) { mutableStateOf(state.target?.enabled ?: false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("设置", style = MaterialTheme.typography.titleLarge)
+        MemosButton("连接原 Memos", "link", onClick = connectMemos)
         Text("外观", style = MaterialTheme.typography.titleMedium)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("系统" to "monitor", "浅色" to "sun", "深色" to "moon").forEach { (label, icon) ->

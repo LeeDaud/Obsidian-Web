@@ -16,11 +16,12 @@ data class AttachmentRef(val id: String, val file: String, val name: String, val
                          val sha256: String, val created: Long, val extension: String)
 data class Draft(val id: String = newId(), val parentId: String? = null, val body: String = "", val todo: Boolean = false,
                  val attachments: List<AttachmentRef> = emptyList(), val location: String? = null,
-                 val created: Long = System.currentTimeMillis(), val generation: Long = 0, val baseRevision: Int = 0)
+                 val created: Long = System.currentTimeMillis(), val generation: Long = 0, val baseRevision: Int = 0,
+                 val referenceIds: List<String>? = null, val spaceName: String? = null, val updatedOverride: Long? = null)
 data class Note(val id: String, val created: Long, val updated: Long, val revision: Int, val body: String,
                 val todo: Boolean, val attachments: List<AttachmentRef>, val parentId: String?, val location: String?,
                 val file: String, val sha256: String, val frozen: Boolean = false, val pinned: Boolean = false,
-                val archived: Boolean = false, val deleted: Boolean = false)
+                val archived: Boolean = false, val deleted: Boolean = false, val referenceIds: List<String>? = null, val spaceName: String? = null)
 data class Target(val id: String, val owner: String, val repo: String, val branch: String, val repositoryId: Long,
                   val enabled: Boolean, val credential: String = id)
 data class DeliveryFile(val path: String, val base64: String, val sha256: String, val localFile: String = "")
@@ -47,7 +48,7 @@ object NoteFormat {
         require(attachments.all { it.size in 0..ATTACHMENT_LIMIT && Regex("[a-z0-9]{1,10}").matches(it.extension) }) { "附件超过 10 MiB 或格式无效" }
     }
 
-    fun markdown(note: Note, path: String, parentPath: String? = null): String {
+    fun markdown(note: Note, path: String, parentPath: String? = null, referencePaths: Map<String, String> = emptyMap()): String {
         require(Regex("00_Inbox/\\d{8}-\\d{6}\\.md").matches(path)) { "笔记路径无效" }
         val stem = path.substringAfter('/').removeSuffix(".md")
         var text = note.body
@@ -68,6 +69,14 @@ object NoteFormat {
         if (parentPath != null) {
             require(Regex("00_Inbox/\\d{8}-\\d{6}\\.md").matches(parentPath)) { "父笔记路径无效" }
             text += "\n\n---\n续写自：[[${parentPath.substringAfter('/').removeSuffix(".md")}]]"
+        }
+        note.referenceIds.orEmpty().distinct().filter { it != note.parentId }.forEach { id ->
+            require(Regex("[A-Za-z0-9][A-Za-z0-9_-]{0,119}").matches(id)) { "引用标识无效" }
+            val reference = referencePaths[id]
+            if (reference != null) {
+                require(Regex("00_Inbox/\\d{8}-\\d{6}\\.md").matches(reference)) { "引用路径无效" }
+                text += "\n\n引用：[[${reference.substringAfter('/').removeSuffix(".md")}]]"
+            } else text += "\n\n引用：[本机笔记](echo://memos/$id)"
         }
         validate(text, note.attachments)
         return text

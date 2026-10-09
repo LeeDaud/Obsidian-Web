@@ -51,6 +51,10 @@ class NativeLocalUiTest {
             app.onNodeWithTag("header-safe-area").fetchSemanticsNode().boundsInWindow.height, .5f)
     }
     @Test fun opensLocalEditorAndSavesWithoutServerOrAccount() {
+        // This regression covers the retained Compose UI, not the APK-local Web UI.
+        val legacyModel = androidx.lifecycle.ViewModelProvider(app.activity)[NoteViewModel::class.java]
+        val legacyMemos = androidx.lifecycle.ViewModelProvider(app.activity)[xyz.leedaud.echo.memos.MemosViewModel::class.java]
+        app.activity.runOnUiThread { app.activity.setContent { EchoApp(legacyModel, legacyMemos) } }
         app.waitUntil(15000) { app.onAllNodesWithTag("note-editor").fetchSemanticsNodes().isNotEmpty() }
         app.onNodeWithTag("note-editor").performTextInput("原生合成记录，不需要服务器")
         app.onNodeWithTag("stash").performScrollTo().performClick()

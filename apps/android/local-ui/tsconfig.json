@@ -1,0 +1,32 @@
+{
+  "extends": "../../../upstream/memos/web/tsconfig.json",
+  "compilerOptions": {
+    "skipLibCheck": true,
+    "paths": {
+      "@/connect": ["./src/connect.ts"],
+      "@/auth-state": ["./src/auth-state.ts"],
+      "@/hooks/useLiveMemoRefresh": ["./src/live-refresh.ts"],
+      "@/components/Settings/MyAccountSection": ["./src/NativeAccountSection.tsx"],
+      "@/components/Settings/settingSections": ["./src/setting-sections.ts"],
+      "@/lib/browser": ["./src/browser.ts"],
+      "@/lib/memo-export": ["./src/memo-export.ts"],
+      "@/*": ["../../../upstream/memos/web/src/*"],
+      "react": ["../../../upstream/memos/web/node_modules/@types/react"],
+      "react/*": ["../../../upstream/memos/web/node_modules/@types/react/*"],
+      "lucide-react": ["../../../upstream/memos/web/node_modules/lucide-react"],
+      "react-hot-toast": ["../../../upstream/memos/web/node_modules/react-hot-toast"],
+      "@tanstack/react-query": ["../../../upstream/memos/web/node_modules/@tanstack/react-query"],
+      "@tanstack/query-core": ["../../../upstream/memos/web/node_modules/.pnpm/node_modules/@tanstack/query-core/build/modern/index.d.ts"],
+      "react-router-dom": ["../../../upstream/memos/web/node_modules/react-router-dom/dist/index.d.ts"],
+      "react-router": ["../../../upstream/memos/web/node_modules/.pnpm/node_modules/react-router/dist/development/index.d.ts"],
+      "react-router/dom": ["../../../upstream/memos/web/node_modules/.pnpm/node_modules/react-router/dist/development/dom-export.d.ts"],
+      "@lezer/markdown": ["../../../upstream/memos/web/node_modules/@lezer/markdown/dist/index.d.ts"],
+      "@lezer/common": ["../../../upstream/memos/web/node_modules/.pnpm/node_modules/@lezer/common/dist/index.d.ts"],
+      "lodash-es": ["../../../upstream/memos/web/node_modules/@types/lodash-es/index.d.ts"],
+      "lodash": ["../../../upstream/memos/web/node_modules/.pnpm/node_modules/@types/lodash/index.d.ts"],
+      "@react-leaflet/core": ["../../../upstream/memos/web/node_modules/.pnpm/node_modules/@react-leaflet/core/lib/index.d.ts"],
+      "hast-util-sanitize": ["../../../upstream/memos/web/node_modules/.pnpm/node_modules/hast-util-sanitize/index.d.ts"]
+    }
+  },
+  "include": ["./src", "../../../upstream/memos/web/src/types"]
+}

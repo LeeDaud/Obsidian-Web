@@ -12,6 +12,9 @@ import xyz.leedaud.echo.delivery.*
 import xyz.leedaud.echo.notes.*
 import xyz.leedaud.echo.notes.Target
 import xyz.leedaud.echo.storage.*
+import xyz.leedaud.echo.memos.MemosCachedMemo
+import xyz.leedaud.echo.memos.MemosMemo
+import xyz.leedaud.echo.memos.memosOrigin
 import java.io.InputStream
 import java.util.concurrent.Executors
 
@@ -98,6 +101,30 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
             repository.saveDraft(previous)
             val next = repository.select(Draft(parentId = parent?.id))
             mutable.update { it.copy(draft = next, draftSaved = true) }
+        }
+    }
+    fun adoptMemosCopy(cached: MemosCachedMemo, origin: String) {
+        val previous = mutable.value.draft
+        autosave?.cancel()
+        operation {
+            val body = cached.memo.body + "\n\n---\n\n[Memos 原记录](${cached.memo.url(origin)})\n"
+            require(body.toByteArray(Charsets.UTF_8).size <= NoteFormat.TEXT_LIMIT) { "添加来源后正文超限，请先拆分记录" }
+            cached.files.forEach { require(it.file.length() == it.attachment.size && digest(it.file.readBytes()) == it.sha256) { "离线附件核验失败，未创建草稿" } }
+            val attachments = cached.files.map { it.file.inputStream().use { stream -> repository.importStream(stream, it.attachment.filename, it.attachment.mime) } }
+            NoteFormat.validate(body, attachments)
+            repository.saveDraft(previous)
+            val next = repository.select(Draft(body = body, attachments = attachments))
+            mutable.update { it.copy(draft = next, draftSaved = true, message = "已另存设备草稿，没有上传或修改原记录") }
+        }
+    }
+    fun continueMemos(memo: MemosMemo, origin: String) {
+        val previous = mutable.value.draft
+        autosave?.cancel()
+        operation {
+            val source = memo.url(memosOrigin(origin))
+            repository.saveDraft(previous)
+            val next = repository.select(Draft(body = "\n\n续写自：[Memos 原记录]($source)\n"))
+            mutable.update { it.copy(draft = next, draftSaved = true, message = "已创建本机续写草稿，没有修改原记录或上传") }
         }
     }
     fun edit(note: Note) {

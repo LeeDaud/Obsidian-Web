@@ -4,6 +4,31 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.compose'
 }
 
+tasks.register('buildLocalUi', Exec) {
+    workingDir rootProject.projectDir.parentFile.parentFile
+    commandLine 'node', 'upstream/memos/web/node_modules/vite/bin/vite.js', 'build', '--config', 'apps/android/local-ui/vite.config.mts'
+    inputs.dir '../local-ui'
+    inputs.dir '../../../upstream/memos/web/src'
+    inputs.file '../../../upstream/memos/web/pnpm-lock.yaml'
+    outputs.dir "$buildDir/generated/assets/local-ui"
+}
+tasks.named('preBuild').configure { dependsOn 'buildLocalUi' }
+def localUiDigest = java.security.MessageDigest.getInstance('SHA-256')
+def localUiInputs = fileTree('../local-ui') { include '**/*.ts', '**/*.tsx', '**/*.mts', '**/*.css', 'index.html', 'package-lock.json'; exclude 'node_modules/**' }.files +
+    fileTree('../../../upstream/memos/web/src').files + fileTree('../../../upstream/memos/web/public').files
+localUiInputs.sort { it.absolutePath }.each { source -> localUiDigest.update(source.absolutePath.bytes); localUiDigest.update(source.bytes) }
+def localUiStage = "$buildDir/packaged-local-ui/${localUiDigest.digest().encodeHex()}"
+tasks.register('stageLocalUi', Copy) {
+    dependsOn 'buildLocalUi'
+    from "$buildDir/generated/assets/local-ui"
+    into "$localUiStage/local-ui"
+    include { entry ->
+        def manifest = new groovy.json.JsonSlurper().parse(file("$buildDir/current-local-ui-assets.json"))
+        entry.directory || manifest.contains(entry.relativePath.pathString)
+    }
+}
+tasks.named('preBuild').configure { dependsOn 'stageLocalUi' }
+
 android {
     namespace 'xyz.leedaud.echo'
     compileSdk 36
@@ -14,8 +39,8 @@ android {
         applicationId 'xyz.leedaud.echo'
         minSdk 26
         targetSdk 36
-        versionCode 2
-        versionName '0.2.0'
+        versionCode 6
+        versionName '0.4.0-preview2'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         javaCompileOptions { annotationProcessorOptions { arguments = ['room.schemaLocation': "$projectDir/schemas"] } }
     }
@@ -24,21 +49,23 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
     buildTypes {
-        debug { debuggable true }
+        debug { debuggable true; buildConfigField 'boolean', 'LOCAL_UI_DEFAULT', 'false' }
         qa {
             initWith debug
             applicationIdSuffix '.qa'
             versionNameSuffix '-qa'
             resValue 'string', 'app_name', 'Echo QA'
             matchingFallbacks = ['debug']
+            buildConfigField 'boolean', 'LOCAL_UI_DEFAULT', 'false'
         }
-        release { minifyEnabled false }
+        release { minifyEnabled false; buildConfigField 'boolean', 'LOCAL_UI_DEFAULT', 'false' }
     }
     testBuildType 'qa'
     lint { abortOnError true }
     kotlinOptions { jvmTarget = '17' }
     testOptions { unitTests.includeAndroidResources = true }
     sourceSets {
+        main.assets.srcDir localUiStage
         main.java.exclude '**/MainActivity.java', '**/NavigationPolicy.java'
         test.java.exclude '**/NavigationPolicyTest.java'
         androidTest.java.exclude '**/AndroidSmokeInstrumentation.java'

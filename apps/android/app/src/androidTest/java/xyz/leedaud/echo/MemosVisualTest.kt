@@ -62,7 +62,7 @@ class MemosVisualTest {
             app.onNodeWithContentDescription("${month.atDay(1)}，1条笔记").performClick()
             assertEquals(month.atDay(1).toString(), picked)
             InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(100, 2000)
-            val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()!!
+            val bitmap = captureQaScreen()
             val width = app.activity.resources.configuration.screenWidthDp
             val file = File(app.activity.externalCacheDir, "ui-visual/detail-calendar-${if (dark) "dark" else "light"}-$width.png")
             file.parentFile!!.mkdirs()
@@ -100,7 +100,7 @@ class MemosVisualTest {
             app.waitForIdle()
             InstrumentationRegistry.getInstrumentation().uiAutomation.waitForIdle(100, 2000)
             val width = app.activity.resources.configuration.screenWidthDp
-            val bitmap = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+            val bitmap = captureQaScreen()
             assertNotNull("The emulator must render a real screen", bitmap)
             val file = File(app.activity.externalCacheDir, "ui-visual/native-$name-$width.png")
             file.parentFile!!.mkdirs()

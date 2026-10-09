@@ -32,5 +32,6 @@ Memos logo and reference theme/layout
 Source: https://github.com/usememos/memos
 License: MIT (MEMOS-LICENSE.txt).
 
-This APK contains Memos reference artwork, but not the Memos web application or the vendored Ignis/Obsidian runtime.
+This APK contains the locally bundled Memos web application and reference artwork, but not the vendored Ignis/Obsidian runtime.
+Bundled web runtime dependency licenses and notices are generated into local-ui/THIRD-PARTY-NOTICES.txt.
 Test-only JUnit/Robolectric components are not application runtime code.
