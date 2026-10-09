@@ -318,6 +318,20 @@ CI/CD、生产部署、HTTPS、服务器系统服务均未新增或启用。Obsi
 - 使用本机 Chrome 访问正式 HTTPS 原版 Memos，390×844px 移动视口，登录 token 只在进程内存中传递。页面实际出现“已投递”，所属 DOM 位于 `memo-header-meta` 时间戳区域；可见笔记查询合并为 1 次请求。
 - 等待三点菜单挂载后核验：已投递笔记有“续写”菜单项，没有“投递到 Obsidian”。真实编辑器的记录类型为 2 个等宽按钮，整行占满，触控高度至少 44px。页面无横向溢出，pageerror=0，提交/创建/更新请求=0。
 - 本轮原版页面的状态/菜单/布局验收成功，不再沿用上一轮因公网超时未完成的结论。原笔记更新和关联续写仍由本地行为测试核验；生产只读检查没有实际保存、创建或重投内容，手机硬件与电脑逐条接收仍待真实使用。
+# 2026-10-09 继续验收：生命周期、权限、录音与实际IME
+
+- 用户在发布预览包后要求继续验收。本轮只用项目内API35隔离模拟器emulator-5558、WebView124、合成笔记，无真实账号/笔记/仓库、生产部署、源码提交推送、数据库迁移或CI/CD修改。已发布的GitHub `v0.4.0-preview2` 仍指向f56ad20，本轮工作树修复没有替换发布附件，也未切换默认入口。
+- 新增 `verify-lifecycle-android.ts`：暂存不创建正式笔记，3次强制停止/冷启动保持完整Markdown，关闭WiFi/数据后重开，实际系统文件选择与导出取消，原录音入口的系统麦克风拒绝，原位置面板的定位拒绝/关闭，显式保存后重开不复活，约90KB列表及详情响应重组，首页/日历/归档/附件/设置的浅深色10张截图及横向溢出检查。最终11组检查通过，startupRetries=0、pageerror=0；报告位于忽略的 `app/build/android-qa/local-ui/lifecycle/result.json`。
+- 实际IME：原WebView边界 `[0,24][432,908]`，状态栏24px、底部导航24px各保留一次；ADB真实触控打开系统软键盘，innerHeight从884变572，editorBottom97、saveBottom242.5均在可视区内，返回键收起后恢复884。`system-bars.png` 等待列表完成后截取，`system-ime.png` 是完整Android画面，已目视核对系统栏与输入区不重叠。这不替代真实中文组合输入或刘海手机硬件验收。
+- 测试纠正：首次用innerText比较CodeMirror多段内容产生额外行盒空行，核验实际缓存后改为逐`.cm-line`文本比对；原“增加”和位置“关闭”按钮按真实标签定位。Playwright原生选择器缺Android驱动，改用已有ADB/UIAutomator，不新增全局依赖。运行中撤销定位权限导致系统终止App，之后在冷启动前准备权限初始状态；最终完整重跑通过。没有把早期失败计入成功结果。
+- 权限修复：LocalUiPlatform销毁后拒绝新系统操作，迟到文件解析不能打开选择器；文件解析阶段预占导出会话，避免并发打开系统保存；WebChrome取消请求时清除当前麦克风请求，迟到系统授权不能grant；destroy取消待处理权限/文件回调。新增4项Robolectric测试核对选择器取消/销毁、外源/视频/空权限拒绝、已授权后销毁与取消后迟到授权。
+- 成功录音测试：当前模拟器以`-no-audio`启动，真实getUserMedia返回NotReadableError，不能冒充硬件采集成功。`verify-recording-android.ts`只在测试页注入不连接扬声器/电脑麦克风的Web Audio合成流，沿用原MediaRecorder和全部原附件界面，实际生成audio/webm、36,338字节，暂存/保存/读取字节数一致，pageerror=0；报告明确nativeMicrophoneCaptureVerified=false。未修改WebView系统flags或生产录音逻辑。
+- 此测试暴露MediaRecorder生成`audio/webm;codecs=opus`被原生MIME正则拒绝；上传改用Android `Intent.normalizeMimeType`规范化基础MIME，保留原始字节并限制输入长度，增加codec MIME回归。显式异步暂存增加错误提示/保留输入，自动暂存用固定toast ID避免风暴，成功时清除旧错误；原通知依赖统一指向其ESM入口，消除dismiss的CommonJS互操作错误。浏览器故障注入验证失败保留原文、恢复可重试且pageerror=0。
+- 最终 `testDebugUnitTest lintDebug assembleDebug`、候选TypeScript及原组件三宽度浏览器检查通过；67项本地测试0失败，Lint0错误/18警告，保留既有Vite CSS/highlight及chunk警告。新账号入口采用原`touch-target-coarse`，移动点击区44px，不重绘原控件。
+- ss-review：已按engine/.claude/skills/ss-review/SKILL.md的token/组件/可访问性/移动/性能/字体/间距清单审查。新增提示使用原通知组件，无新硬编码配色/间距；原Web样式、默认导出约定和quiet控件遵循本项目原版优先例外。已目视日历、深色设置/首页和系统栏/IME，三宽度短卡102px/正文24px且无溢出。整体仍Needs Improvement：`local-ui/index.html` 的frame-src none仍使受信iframe不对等，完整格式/所有页面同设备视觉及最低内核未闭环；下一步应完成受限嵌入策略与定向设备对照，而不是把局部通过当整体1:1。
+- 真实账号登录、实际GitHub投递、手机硬件及完整格式矩阵仍待原授权边界内分别验收；本轮本地APK仍为内部验收包，不发布为正式完整迁移结果。
+- 最终内部验收APK为16,351,101字节，SHA-256 `7deeffb58b8b2d5c865f11320b98e071042e428b6c71e698ced85577975e09eb`；签名核验通过，345项本地资产与清单差异0。最后在此包实际核对新增账号按钮2个，pointer:coarse=true、height=44、无溢出；截图为account-touch-targets.png。它不同于已发布Release的b9e3ea22版本，不能混用校验值或宣称发布包已更新。
+
 # 2026-10-09 草稿恢复、损坏缓存与附件 Range 修复
 
 - 已消费草稿在原生落盘前按编辑 changeToken 拦截迟到回放，保留精确 localStorage 消费值；新 token 的相同正文仍允许暂存。保存前写完整 Draft 检查点和待消费值，恢复时核对正文、附件、父引用、多引用、位置、分组和时间，不能仅凭正文相同消除草稿。无 Room schema 迁移，旧无检查点条目保留而非猜测已保存。

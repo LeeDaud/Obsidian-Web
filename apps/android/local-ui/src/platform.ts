@@ -1,5 +1,6 @@
 import { nativeCall } from "./bridge";
 import { uploadFile } from "./drafts";
+import { toast } from "react-hot-toast";
 export const browserFetch = globalThis.fetch.bind(globalThis);
 export async function saveBlob(blob: Blob, filename: string, share = false): Promise<void> {
   const attachment = await uploadFile(new File([blob], filename, { type: blob.type || "application/octet-stream" }), "export");
@@ -10,6 +11,8 @@ export async function downloadFileFromUrl(url: string, filename: string) {
   const response = await browserFetch(url); await saveBlob(await response.blob(), filename);
 }
 export function installPlatform() {
+  window.addEventListener("echo-draft-failed", () => toast.error("设备暂存未完成，内容仍在编辑器中", { id: "echo-device-draft" }));
+  window.addEventListener("echo-draft-saved", () => toast.dismiss("echo-device-draft"));
   Object.defineProperty(navigator, "share", { configurable: true, value: async (data: ShareData) => {
     if (data.files?.length === 1) await saveBlob(data.files[0], data.files[0].name, true);
     else if (data.text) await nativeCall("platform.clipboard", { text: data.text });

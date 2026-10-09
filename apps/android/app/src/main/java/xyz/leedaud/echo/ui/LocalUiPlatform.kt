@@ -24,6 +24,9 @@ class LocalUiPlatform(private val activity: ComponentActivity) {
     private var files: ValueCallback<Array<Uri>>? = null
     private var export: Pair<File, (JSONObject?, String?) -> Unit>? = null
     private var permission: ((Boolean) -> Unit)? = null
+    private var microphoneRequest: PermissionRequest? = null
+    private var destroyed = false
+    private var resolvingExport = false
     var refreshAfterSettings = false
     var resolveFile: ((String) -> Pair<String, File>)? = null
     private val picker = activity.registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -42,21 +45,33 @@ class LocalUiPlatform(private val activity: ComponentActivity) {
         val callback = permission; permission = null; callback?.invoke(values.values.any { it })
     }
     fun choose(params: WebChromeClient.FileChooserParams, callback: ValueCallback<Array<Uri>>): Boolean {
+        if (destroyed) { callback.onReceiveValue(null); return false }
         files?.onReceiveValue(null)
         files = callback
         picker.launch(params.acceptTypes.filter { it.isNotBlank() }.toTypedArray().ifEmpty { arrayOf("*/*") })
         return true
     }
     fun microphone(request: PermissionRequest) {
-        if (!LocalWebView.trusted(request.origin) || request.resources.any { it != PermissionRequest.RESOURCE_AUDIO_CAPTURE }) { request.deny(); return }
-        authorize(arrayOf(Manifest.permission.RECORD_AUDIO)) { granted -> runCatching { if (granted) request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) else request.deny() } }
+        if (destroyed || microphoneRequest != null || !LocalWebView.trusted(request.origin) || request.resources.isEmpty()
+            || request.resources.any { it != PermissionRequest.RESOURCE_AUDIO_CAPTURE }) { request.deny(); return }
+        microphoneRequest = request
+        authorize(arrayOf(Manifest.permission.RECORD_AUDIO)) { granted ->
+            if (microphoneRequest !== request) return@authorize
+            microphoneRequest = null
+            runCatching { if (granted && !destroyed) request.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) else request.deny() }
+        }
+    }
+    fun cancelMicrophone(request: PermissionRequest) {
+        if (microphoneRequest === request) microphoneRequest = null
     }
     private fun authorize(names: Array<String>, callback: (Boolean) -> Unit) {
+        if (destroyed) { callback(false); return }
         if (names.any { ContextCompat.checkSelfPermission(activity, it) == PackageManager.PERMISSION_GRANTED }) { callback(true); return }
         if (permission != null) { callback(false); return }
         permission = callback; requester.launch(names)
     }
     fun handle(command: String, input: JSONObject, reply: (JSONObject?, String?) -> Unit) {
+        if (destroyed) { reply(null, "页面已关闭"); return }
         when (command) {
             "platform.settings" -> {
                 refreshAfterSettings = true
@@ -85,10 +100,13 @@ class LocalUiPlatform(private val activity: ComponentActivity) {
                 if (location == null) reply(null, "没有可用位置，可手动设置坐标") else reply(JSONObject().put("latitude", location.latitude).put("longitude", location.longitude).put("accuracy", location.accuracy), null)
             }
             "platform.save", "platform.share", "platform.view" -> {
-                if (export != null) { reply(null, "请先完成当前导出"); return }
+                if (export != null || resolvingExport) { reply(null, "请先完成当前导出"); return }
+                resolvingExport = true
                 io.execute {
                     val resolved = runCatching { resolveFile?.invoke(input.getString("name")) ?: error("No resource") }
                     activity.runOnUiThread {
+                        resolvingExport = false
+                        if (destroyed) { reply(null, "页面已关闭"); return@runOnUiThread }
                         val pair = resolved.getOrNull()
                         if (pair == null) { reply(null, "导出文件核验失败"); return@runOnUiThread }
                         val filename = input.optString("filename", "memos-export.bin").replace(Regex("[/\\\\\r\n]"), "_").take(180)
@@ -108,5 +126,13 @@ class LocalUiPlatform(private val activity: ComponentActivity) {
             else -> reply(null, "系统操作不支持")
         }
     }
-    fun destroy() { files?.onReceiveValue(null); files = null; export?.second?.invoke(null, "页面已关闭"); export = null; io.shutdown() }
+    fun destroy() {
+        if (destroyed) return
+        destroyed = true
+        files?.onReceiveValue(null); files = null
+        val callback = permission; permission = null; callback?.invoke(false)
+        microphoneRequest = null
+        export?.second?.invoke(null, "页面已关闭"); export = null
+        io.shutdown()
+    }
 }

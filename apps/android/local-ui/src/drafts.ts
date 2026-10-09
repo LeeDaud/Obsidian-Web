@@ -54,6 +54,7 @@ export async function persistEditorDraft(key: string, state: EditorState, baseRe
     relations: state.metadata.relations.map((item) => toJson(MemoRelationSchema, item)), baseRevision, changeToken });
   localStorage.setItem(key, value);
   await nativeCall("local.draft", { key, value });
+  window.dispatchEvent(new Event("echo-draft-saved"));
 }
 export function clearEditorDraft(key: string) {
   sequence.set(key, (sequence.get(key) ?? 0) + 1); localStorage.removeItem(key);

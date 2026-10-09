@@ -2,6 +2,8 @@
 
 版本：0.4.0-preview2 / versionCode6（阶段内部调试包） · 日期：2026-10-09。
 
+GitHub预发布 `v0.4.0-preview2` 已按用户授权发布，指向f56ad20。当前继续验收产生的权限、录音MIME和暂存故障修复仅在本地工作树中，尚未提交推送或替换该Release附件；不要把已下载的包视为包含本轮修复。完整验收和默认入口切换仍见核对表。
+
 原 React/CSS/CodeMirror/Markdown 已打包到 APK 本地，接入本机草稿、附件、多引用、筛选/分组、导入/导出及原生账号管理；API35 / WebView124 已通过实际编辑、保存、格式和附件字节范围验证。当前默认仍为保留的 Compose 入口；候选通过 Debug 的显式 `local-ui-preview=true` 启动，release 不开放预览开关。完整权限、恢复、iframe 与逐页视觉矩阵未闭环，不能作为完整 1:1 迁移验收。启动示例：`adb shell am start -n xyz.leedaud.echo/.NativeActivity --ez local-ui-preview true`。
 
 当前启动入口为 Kotlin/Compose 的 `NativeActivity`，编辑、列表、草稿、正式 Markdown 和附件在本机运行。首次安装无需 Memos 账号、服务器地址或 GitHub 配置；核心流程不连接 Memos/Echo。现有 Web 服务继续保留，ObsidianHub 尚未接入。
@@ -20,7 +22,7 @@ APK 位于 `apps/android/app/build/outputs/apk/debug/app-debug.apk`。将文件�
 
 本包沿用本机既有调试签名，支持覆盖同签名的 0.1.0 容器原型；不要先卸载或清除 App 数据。旧 WebView 文件仍保留，但不编入 APK，也不自动导入旧浏览器/WebView 草稿、Memos 或 GitHub 历史。原型文件不是回退网页入口。
 
-正式发行签名、公开分发和私人旧数据导入尚未授权。项目 build/android-qa 内有隔离 API26/35 模拟器；合成截图与交互验证不代替用户手机、真实输入法和权限验收。
+已授权并完成当前调试APK的GitHub预发布；正式发行签名、稳定版/商店上架和私人旧数据导入仍另行授权。项目 build/android-qa 内有隔离 API26/35 模拟器；合成截图与交互验证不代替用户手机和真实输入法验收。
 
 ## 连接原 Memos
 

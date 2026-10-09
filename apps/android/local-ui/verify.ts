@@ -26,6 +26,7 @@ try {
       if (command === "local.bootstrap") return { drafts: {} };
       if (command === "local.list") return { memos, next: -1 };
       if (command === "platform.theme") return {};
+      if (command === "local.draft" && (window as any).__failLocalDraft) throw new Error("Synthetic draft failure");
       if (command === "local.draft" || command === "local.clear-draft") return { saved: true };
       if (command === "echo.status") return { enabled: true };
       if (command === "echo.memo-statuses") return memos.map((memo) => ({ memo: memo.name, state: "unknown" }));
@@ -99,6 +100,14 @@ try {
   await page.locator('[data-memo-content]').filter({ hasText: "合成原组件正文" }).waitFor();
   const commands = await page.evaluate(() => (window as any).__localCalls.map((call: any) => call.command));
   if (!commands.includes("local.draft") || !commands.includes("local.clear-draft")) throw new Error("Native draft lifecycle did not run");
+  await page.evaluate(() => { (window as any).__failLocalDraft = true; });
+  await page.locator(".cm-content").fill("合成暂存故障，原文保留");
+  await page.getByRole("button", { name: "暂存到当前设备", exact: true }).click();
+  await page.getByText("synthetic unsupported", { exact: true }).waitFor();
+  if (!(await page.locator(".cm-content").innerText()).includes("合成暂存故障，原文保留")) throw new Error("Failed stash cleared editor");
+  await page.evaluate(() => { (window as any).__failLocalDraft = false; });
+  await page.getByRole("button", { name: "暂存到当前设备", exact: true }).click();
+  await page.getByText("已暂存到当前设备", { exact: true }).waitFor();
   if (errors.length) throw new Error(`Page errors: ${errors.join(", ")}`);
   await writeFile(`${out}/browser-verification.json`, JSON.stringify({ measurements, errors, blocked, commands }, null, 2));
   console.log(JSON.stringify({ result: "passed", measurements, errors, blocked: blocked.length, commands }));

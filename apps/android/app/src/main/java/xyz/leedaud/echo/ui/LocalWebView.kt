@@ -83,6 +83,7 @@ class LocalWebView(private val activity: Activity, private val backend: LocalUiB
             override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean =
                 if (trustedDocument(Uri.parse(view.url ?: ""))) platform.choose(params, callback) else false
             override fun onPermissionRequest(request: PermissionRequest) { platform.microphone(request) }
+            override fun onPermissionRequestCanceled(request: PermissionRequest) { platform.cancelMicrophone(request) }
         }
         if (xyz.leedaud.echo.BuildConfig.DEBUG) setWebContentsDebuggingEnabled(true)
         webViewClient = object : WebViewClient() {

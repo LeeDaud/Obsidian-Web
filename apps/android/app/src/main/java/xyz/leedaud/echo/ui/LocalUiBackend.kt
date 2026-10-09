@@ -60,10 +60,11 @@ class LocalUiBackend(private val context: Context, private val repository: NoteR
             val data = spec.getJSONObject("attachment")
             val size = spec.optString("totalSize", "0").toLongOrNull() ?: throw LocalUiFailure("附件大小无效")
             val filename = data.optString("filename")
-            val mime = data.optString("type").ifBlank { "application/octet-stream" }
+            val rawMime = data.optString("type").ifBlank { "application/octet-stream" }
+            val mime = android.content.Intent.normalizeMimeType(rawMime).orEmpty()
             val limit = if (spec.optString("purpose") == "import") 25 * 1024 * 1024 else NoteFormat.ATTACHMENT_LIMIT
             if (size !in 0..limit || filename.isBlank() || filename.length > 255 || filename.any { it.code < 32 || it in "/\\" }
-                || !Regex("[A-Za-z0-9.+-]+/[A-Za-z0-9.+-]+").matches(mime) || data.optString("externalLink").isNotBlank()) throw LocalUiFailure("附件名称、来源或大小无效，单文件最多 10 MiB")
+                || rawMime.length > 255 || !Regex("[A-Za-z0-9.+-]+/[A-Za-z0-9.+-]+").matches(mime) || data.optString("externalLink").isNotBlank()) throw LocalUiFailure("附件名称、来源或大小无效，单文件最多 10 MiB")
             val directory = File(root, "uploads").apply { mkdirs() }
             if (directory.listFiles().orEmpty().count { it.extension == "json" && !json(it).optBoolean("complete") } >= 8) throw LocalUiFailure("待完成附件过多，请完成当前附件后再试")
             val id = newId()

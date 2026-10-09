@@ -18,7 +18,7 @@ export function nativeAdapters() {
       if (file.endsWith("/components/MemoEditor/index.tsx")) {
         code = inject(code, "ref={editorContainerRef}", "ref={editorContainerRef} data-echo-editor-key={editorCacheKey}");
         code = inject(code, "const handleDraft = useCallback(() => {", "const handleDraft = useCallback(async () => {");
-        code = inject(code, "    saveDraft();", "    await saveDraft();");
+        code = inject(code, '    saveDraft();\n    toast.success("已暂存到当前设备");', '    try {\n      await saveDraft();\n      toast.success("已暂存到当前设备");\n    } catch (error) {\n      toast.error(error instanceof Error ? error.message : "设备暂存未完成，内容保留");\n    }');
       }
       if (file.endsWith("/MemoEditor/hooks/useMemoInit.ts")) {
         code = `import { cachedRelations } from '${source}/drafts';\n${code}`;

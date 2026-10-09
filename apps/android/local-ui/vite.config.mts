@@ -53,7 +53,7 @@ export default defineConfig({
       { find: /^react$/, replacement: resolve(upstream, "node_modules/react") },
       { find: /^react\//, replacement: `${upstream}/node_modules/react/` },
       { find: /^lucide-react$/, replacement: resolve(upstream, "node_modules/lucide-react") },
-      { find: /^react-hot-toast$/, replacement: resolve(upstream, "node_modules/react-hot-toast") },
+      { find: /^react-hot-toast$/, replacement: resolve(upstream, "node_modules/react-hot-toast/dist/index.mjs") },
       { find: /^@tanstack\/react-query$/, replacement: resolve(upstream, "node_modules/@tanstack/react-query") },
       { find: /^@\/connect$/, replacement: resolve(local, "connect.ts") },
       { find: /^@\/auth-state$/, replacement: resolve(local, "auth-state.ts") },

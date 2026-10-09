@@ -109,6 +109,16 @@ class LocalUiBackendTest {
         assertTrue(repo.notes().isEmpty()); assertTrue(repo.deliveries().isEmpty()); assertEquals(0, schedules)
         assertThrows(LocalUiFailure::class.java) { backend.request("memos.api.v1.AttachmentService/UploadAttachment", chunk.put("data", java.util.Base64.getEncoder().encodeToString("bad".toByteArray()))) }
     }
+    @Test fun recorderCodecMimeIsNormalizedWithoutChangingBytes() {
+        val started = backend.request("memos.api.v1.AttachmentService/UploadAttachment", JSONObject().put("spec", JSONObject()
+            .put("attachment", JSONObject().put("filename", "voice-fixture.webm").put("type", "audio/webm;codecs=opus")).put("totalSize", "3"))) as JSONObject
+        val result = backend.request("memos.api.v1.AttachmentService/UploadAttachment", JSONObject().put("uploadId", started.getString("uploadId"))
+            .put("writeOffset", "0").put("data", java.util.Base64.getEncoder().encodeToString("abc".toByteArray())).put("finishWrite", true)) as JSONObject
+        val attachment = result.getJSONObject("attachment")
+        assertEquals("audio/webm", attachment.getString("type"))
+        assertEquals("abc", backend.attachmentFile(attachment.getString("name")).second.readText())
+        assertTrue(repo.notes().isEmpty()); assertTrue(repo.deliveries().isEmpty())
+    }
     @Test fun multireferencesPersistWithoutChangingLegacySha() {
         val a = create("reference A"); val b = create("reference B")
         val relations = org.json.JSONArray(listOf(a, b).map { JSONObject().put("type", "REFERENCE").put("relatedMemo", JSONObject().put("name", it.getString("name"))) })
