@@ -26,12 +26,12 @@ window.addEventListener("message", (event) => {
   port.start(); connected();
 });
 
-export async function nativeCall(command: string, input: unknown = {}): Promise<any> {
+export async function nativeCall(command: string, input: unknown = {}, timeoutMs = 60000): Promise<any> {
   await nativeReady;
   if (pending.size >= 64) throw new Error("请求较多，请稍后重试");
   const id = String(++sequence);
   return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => { pending.delete(id); reject(new Error("本机操作尚未确认，请重试；草稿保留")); }, 60000);
+    const timer = timeoutMs > 0 ? window.setTimeout(() => { pending.delete(id); reject(new Error("本机操作尚未确认，请重试；草稿保留")); }, timeoutMs) : 0;
     pending.set(id, { resolve, reject, timer });
     port!.postMessage(JSON.stringify({ id, command, input }));
   });

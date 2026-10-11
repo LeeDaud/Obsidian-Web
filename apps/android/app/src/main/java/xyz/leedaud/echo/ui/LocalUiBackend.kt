@@ -116,6 +116,7 @@ class LocalUiBackend(private val context: Context, private val repository: NoteR
         return gson.fromJson(json(file).getString("reference"), AttachmentRef::class.java)
     }
     fun attachmentFile(resource: String): Pair<String, File> {
+        if (resource.startsWith("picked/")) return LocalUiPickedFiles(context).resolve(resource)
         if (resource.startsWith("exports/")) return exports.resolve(resource)
         if (resource.startsWith("attachments/r-")) return remote?.attachmentFile(resource) ?: throw LocalUiFailure("请连接原 Memos 账号")
         val ref = attachmentRef(resource); repository.verifyAttachment(ref)

@@ -318,6 +318,22 @@ CI/CD、生产部署、HTTPS、服务器系统服务均未新增或启用。Obsi
 - 使用本机 Chrome 访问正式 HTTPS 原版 Memos，390×844px 移动视口，登录 token 只在进程内存中传递。页面实际出现“已投递”，所属 DOM 位于 `memo-header-meta` 时间戳区域；可见笔记查询合并为 1 次请求。
 - 等待三点菜单挂载后核验：已投递笔记有“续写”菜单项，没有“投递到 Obsidian”。真实编辑器的记录类型为 2 个等宽按钮，整行占满，触控高度至少 44px。页面无横向溢出，pageerror=0，提交/创建/更新请求=0。
 - 本轮原版页面的状态/菜单/布局验收成功，不再沿用上一轮因公网超时未完成的结论。原笔记更新和关联续写仍由本地行为测试核验；生产只读检查没有实际保存、创建或重投内容，手机硬件与电脑逐条接收仍待真实使用。
+# 2026-10-11 主框架专用文件入口
+
+- 中断后核对git仅plan/verification有待确认方案记录，无半完成代码；沿用用户随后“继续”确认的补充方案，仅本地实现。默认入口、发布包、原上游/生产服务、Room schema及凭据不变，无提交推送或部署。
+- `platform.choose`仅经受信主框架port调用；系统选中内容复制到`filesDir/local-ui-picked/UUID.bin`，完整复制后写名称/MIME/大小/SHA索引，最多100文件/合计25MiB。页面只收到picked资源ID，不收到content URI或路径；读取重新校验。复制本身不生成笔记/队列，目录不自动删除。
+- 页面顶层file input的click交给专用入口，选择完成后以DataTransfer触发原change事件，仍使用原文件/元数据/上传管线。取消返回空数组，不改输入；选择期间不使用普通60秒数据超时；页面导航/销毁取消会话，迟到结果不进入新页面。通用WebChrome文件回调统一返回null，allowContentAccess关闭；跨框架不能借主WebView.url取得选择权限。
+- picked/附件GET要求本机Referer，存在Origin时必须为本机，主框架文档导航及缺失/外源Referer拒绝；继续sandbox/nosniff保护。CSP frame-src仍none，本轮没有因文件入口完成而开放第三方网络。
+- 最终 `testDebugUnitTest lintDebug assembleDebug` 成功，72项零失败，Lint0错误/17警告；候选TypeScript通过。新增暂存摘要/容量/恶意URI/ID、选择取消/并发/导航、文件读取来源测试；首次Robolectric缺ZIP MIME映射的失败通过其标准Shadow测试映射补齐后重跑，不放宽生产校验。
+- API35/WebView124真实系统DocumentsUI：选择23字节合成txt→原附件界面→暂存/保存→逐字节读回通过；系统取消保留草稿。另在窗口捕获阶段绕过document级专用处理，触发通用WebChrome入口，系统选择器未打开。pageerror0；结果和截图在忽略的`app/build/android-qa/local-ui/picker/`。合成文件只放隔离模拟器Download及忽略build，不读取真人文件。
+- ss-review局部检查：沿用原输入/附件组件，无新增视觉控件或硬编码样式，文件错误用原toast；实际附件界面可用。整体仍Needs Improvement，正文图片/ZIP导入等扩展设备矩阵及iframe资源/权限/真实服务播放未闭环。iframe不能视为已接通，APK未重发。
+
+# 2026-10-09 提交后继续核对原格式与嵌入边界
+
+- 用户要求“提交并继续”，已创建本地提交8e0ca05 `fix: 修复安卓权限与录音并补充验收`，未推送或发布。此后的核对记录为新工作树改动，不混入该提交。
+- 固定上游定向命令：`node node_modules/vitest/vitest.mjs run tests/editor-formatting.test.ts tests/formatting-toolbar.test.tsx tests/markdown-task-actions.test.ts tests/markdown-manipulation.test.ts tests/memo-markdown-extension.test.ts tests/memo-markdown-memoization.test.tsx`，在upstream/memos/web执行，6文件/44项全部通过。覆盖原格式控制器、工具栏、任务处理、Markdown操作/扩展及memoization；这是原组件逻辑检查，不冒充Android全部格式命令和所有菜单的设备验收。
+- iframe源核查确认原名单含视频、音频、地图及图表提供方，并非只有YouTube。现有WebChrome文件选择依据主WebView.url核验，放开子框架后不足以证明发起框架，因此不能仅放宽CSP。受信第三方网络与主框架专用文件入口补充方案已写入plan，等待确认；本轮未放宽网络、CSP或权限，也未请求真实第三方素材。
+
 # 2026-10-09 继续验收：生命周期、权限、录音与实际IME
 
 - 用户在发布预览包后要求继续验收。本轮只用项目内API35隔离模拟器emulator-5558、WebView124、合成笔记，无真实账号/笔记/仓库、生产部署、源码提交推送、数据库迁移或CI/CD修改。已发布的GitHub `v0.4.0-preview2` 仍指向f56ad20，本轮工作树修复没有替换发布附件，也未切换默认入口。

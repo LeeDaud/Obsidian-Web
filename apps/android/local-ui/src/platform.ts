@@ -11,6 +11,27 @@ export async function downloadFileFromUrl(url: string, filename: string) {
   const response = await browserFetch(url); await saveBlob(await response.blob(), filename);
 }
 export function installPlatform() {
+  document.addEventListener("click", (event) => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement) || input.type !== "file" || input.disabled || window !== window.top) return;
+    event.preventDefault(); event.stopImmediatePropagation();
+    void nativeCall("platform.choose", { accept: input.accept, multiple: input.multiple }, 0).then(async (result) => {
+      if (!input.isConnected || !Array.isArray(result.files) || result.files.length === 0) return;
+      if (result.files.length > 100 || (!input.multiple && result.files.length > 1)) throw new Error("文件选择数量无效");
+      const transfer = new DataTransfer();
+      for (const file of result.files) {
+        if (!/^picked\/[a-f0-9-]{36}$/.test(file.name) || typeof file.filename !== "string") throw new Error("文件选择响应无效");
+        const response = await browserFetch(`/file/${file.name}/${encodeURIComponent(file.filename)}`);
+        if (!response.ok) throw new Error("文件暂存读取失败");
+        const blob = await response.blob();
+        if (blob.size !== Number(file.size)) throw new Error("文件大小核验失败");
+        transfer.items.add(new File([blob], file.filename, { type: file.type }));
+      }
+      if (!input.isConnected) return;
+      input.files = transfer.files;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }).catch((error) => toast.error(error instanceof Error ? error.message : "文件选择未完成"));
+  }, true);
   window.addEventListener("echo-draft-failed", () => toast.error("设备暂存未完成，内容仍在编辑器中", { id: "echo-device-draft" }));
   window.addEventListener("echo-draft-saved", () => toast.dismiss("echo-device-draft"));
   Object.defineProperty(navigator, "share", { configurable: true, value: async (data: ShareData) => {

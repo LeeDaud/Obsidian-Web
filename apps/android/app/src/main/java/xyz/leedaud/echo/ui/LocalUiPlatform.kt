@@ -10,6 +10,7 @@ import android.net.Uri
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.ValueCallback
+import android.webkit.MimeTypeMap
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
@@ -27,10 +28,17 @@ class LocalUiPlatform(private val activity: ComponentActivity) {
     private var microphoneRequest: PermissionRequest? = null
     private var destroyed = false
     private var resolvingExport = false
+    private var chooseReply: ((JSONObject?, String?) -> Unit)? = null
+    private var resolvingPick = false
+    private val pickedFiles = LocalUiPickedFiles(activity)
     var refreshAfterSettings = false
     var resolveFile: ((String) -> Pair<String, File>)? = null
     private val picker = activity.registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        files?.onReceiveValue(uris.takeIf { it.isNotEmpty() }?.toTypedArray()); files = null
+        val callback = files; files = null
+        callback?.onReceiveValue(uris.takeIf { it.isNotEmpty() }?.toTypedArray())
+    }
+    private val singlePicker = activity.registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val callback = files; files = null; callback?.onReceiveValue(uri?.let { arrayOf(it) })
     }
     private val saver = activity.registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         val pending = export ?: return@registerForActivityResult
@@ -48,8 +56,14 @@ class LocalUiPlatform(private val activity: ComponentActivity) {
         if (destroyed) { callback.onReceiveValue(null); return false }
         files?.onReceiveValue(null)
         files = callback
-        picker.launch(params.acceptTypes.filter { it.isNotBlank() }.toTypedArray().ifEmpty { arrayOf("*/*") })
+        val types = params.acceptTypes.filter { it.isNotBlank() }.toTypedArray().ifEmpty { arrayOf("*/*") }
+        if (params.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE) picker.launch(types) else singlePicker.launch(types)
         return true
+    }
+    fun cancelSelection() {
+        val callback = files; files = null; callback?.onReceiveValue(null)
+        val reply = chooseReply; chooseReply = null
+        reply?.invoke(JSONObject().put("files", org.json.JSONArray()), null)
     }
     fun microphone(request: PermissionRequest) {
         if (destroyed || microphoneRequest != null || !LocalWebView.trusted(request.origin) || request.resources.isEmpty()
@@ -73,6 +87,33 @@ class LocalUiPlatform(private val activity: ComponentActivity) {
     fun handle(command: String, input: JSONObject, reply: (JSONObject?, String?) -> Unit) {
         if (destroyed) { reply(null, "页面已关闭"); return }
         when (command) {
+            "platform.choose" -> {
+                if (files != null || chooseReply != null || resolvingPick) { reply(null, "请先完成当前文件选择"); return }
+                val accept = input.optString("accept")
+                if (accept.length > 1024) { reply(null, "文件类型条件过长"); return }
+                val types = accept.split(',').mapNotNull { value ->
+                    val item = value.trim().lowercase()
+                    if (item.startsWith('.')) MimeTypeMap.getSingleton().getMimeTypeFromExtension(item.removePrefix("."))
+                    else item.takeIf { Regex("[a-z0-9.+*-]+/[a-z0-9.+*-]+").matches(it) }
+                }.distinct().toTypedArray().ifEmpty { arrayOf("*/*") }
+                chooseReply = reply
+                files = ValueCallback { uris ->
+                    if (chooseReply !== reply) return@ValueCallback
+                    if (uris == null) { chooseReply = null; reply(JSONObject().put("files", org.json.JSONArray()), null); return@ValueCallback }
+                    resolvingPick = true
+                    io.execute {
+                        val result = runCatching { pickedFiles.copy(uris.toList()) }
+                        activity.runOnUiThread {
+                            resolvingPick = false
+                            if (chooseReply !== reply || destroyed) return@runOnUiThread
+                            chooseReply = null
+                            reply(result.getOrNull(), if (result.isFailure) (result.exceptionOrNull() as? LocalUiFailure)?.message ?: "文件选择未完成，原内容保留" else null)
+                        }
+                    }
+                }
+                try { if (input.optBoolean("multiple")) picker.launch(types) else singlePicker.launch(types) }
+                catch (_: Exception) { files = null; chooseReply = null; reply(null, "无法打开系统文件选择器") }
+            }
             "platform.settings" -> {
                 refreshAfterSettings = true
                 activity.startActivity(Intent(activity, xyz.leedaud.echo.NativeActivity::class.java).putExtra("native-settings", true))
@@ -129,7 +170,7 @@ class LocalUiPlatform(private val activity: ComponentActivity) {
     fun destroy() {
         if (destroyed) return
         destroyed = true
-        files?.onReceiveValue(null); files = null
+        cancelSelection()
         val callback = permission; permission = null; callback?.invoke(false)
         microphoneRequest = null
         export?.second?.invoke(null, "页面已关闭"); export = null

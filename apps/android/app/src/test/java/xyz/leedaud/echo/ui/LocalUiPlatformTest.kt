@@ -61,6 +61,23 @@ class LocalUiPlatformTest {
         assertFalse(platform.choose(params()) { assertNull(it); calls++ })
         assertEquals(3, calls)
     }
+    @Test fun mainFramePickerCancelNavigationAndConcurrentCallsAreBounded() {
+        shadowOf(android.webkit.MimeTypeMap.getSingleton()).addExtensionMimeTypeMapping("zip", "application/zip")
+        var replies = 0
+        platform.handle("platform.choose", JSONObject().put("accept", ".zip").put("multiple", false)) { value, error ->
+            assertNull(error); assertEquals(0, value!!.getJSONArray("files").length()); replies++
+        }
+        var rejected = false
+        platform.handle("platform.choose", JSONObject()) { value, error -> assertNull(value); assertNotNull(error); rejected = true }
+        assertTrue(rejected)
+        val launched = shadowOf(activity).nextStartedActivityForResult
+        assertArrayEquals(arrayOf("application/zip"), launched.intent.getStringArrayExtra(Intent.EXTRA_MIME_TYPES))
+        activity.activityResultRegistry.dispatchResult(launched.requestCode, Activity.RESULT_CANCELED, null)
+        assertEquals(1, replies)
+        platform.handle("platform.choose", JSONObject()) { value, error -> assertNull(error); assertEquals(0, value!!.getJSONArray("files").length()); replies++ }
+        platform.cancelSelection(); platform.cancelSelection()
+        assertEquals(2, replies)
+    }
     @Test fun microphoneRejectsForeignOriginsVideoAndEmptyRequests() {
         for (request in listOf(Request("https://example.test", arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE)),
             Request(LocalWebView.ORIGIN, arrayOf(PermissionRequest.RESOURCE_VIDEO_CAPTURE)), Request(LocalWebView.ORIGIN, emptyArray()))) {

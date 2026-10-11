@@ -74,6 +74,15 @@ class LocalUiBackendTest {
         assertFalse(LocalWebView.trustedDocument(Uri.parse("https://echo-app.local/assets/evil.html")))
         assertTrue(LocalWebView.trustedDocument(Uri.parse("https://echo-app.local/memos/test")))
     }
+    @Test fun privateResourcesRequireLocalReferrerAndRejectForeignOrigins() {
+        assertTrue(LocalWebView.privateResourceReader(false, mapOf("Referer" to "${LocalWebView.ORIGIN}/memos/synthetic")))
+        assertTrue(LocalWebView.privateResourceReader(false, mapOf("referer" to "${LocalWebView.ORIGIN}/", "origin" to LocalWebView.ORIGIN)))
+        assertFalse(LocalWebView.privateResourceReader(true, mapOf("Referer" to LocalWebView.ORIGIN)))
+        assertFalse(LocalWebView.privateResourceReader(false, emptyMap()))
+        assertFalse(LocalWebView.privateResourceReader(false, mapOf("Referer" to "https://www.youtube.com/embed/synthetic")))
+        assertFalse(LocalWebView.privateResourceReader(false, mapOf("Referer" to LocalWebView.ORIGIN, "Origin" to "https://example.test")))
+        assertFalse(LocalWebView.privateResourceReader(false, mapOf("Referer" to "https://echo-app.local.evil.test/")))
+    }
     @Test fun attachmentRangesAreBoundedAndPreserveSandboxHeaders() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val file = File(context.cacheDir, "range-${newId()}.bin").apply { writeText("0123456789") }

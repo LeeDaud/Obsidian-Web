@@ -77,7 +77,7 @@ export const localFetch: typeof fetch = async (input, init) => {
   let payload: unknown = {};
   const method = init?.method ?? (input instanceof Request ? input.method : "GET");
   const body = init?.body ?? (input instanceof Request ? await input.clone().text() : undefined);
-  if ((url.protocol === "blob:" || /^\/(assets|file\/attachments)\//.test(url.pathname)) && method === "GET") return browserFetch(input, init);
+  if ((url.protocol === "blob:" || /^\/(assets|file\/(?:attachments|picked))\//.test(url.pathname)) && method === "GET") return browserFetch(input, init);
   if (/^\/memos\.api\.v1\.[A-Za-z]+Service\/[A-Za-z]+$/.test(url.pathname)) {
     if (method !== "POST" || body == null) throw new Error("请求格式不支持");
     const text = typeof body === "string" ? body : body instanceof Uint8Array || body instanceof ArrayBuffer ? new TextDecoder().decode(body) : undefined;

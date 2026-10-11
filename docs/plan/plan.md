@@ -703,3 +703,21 @@ P0确认需求 → P1技术可行性 → P2离线记录闭环 → P3直投GitHub
 - 附件分块暂存、完整大小/摘要核验及私有索引位于设备 local-ui-state；缓存/记录不自动删除。原生文件选择/录音/定位/分享/导出通过 ActivityResult 和系统权限；JS 不持有 token、密钥或任意私有路径。
 - 原 Memos 来源按实例/用户隔离投影为独立 UID，仍只读；原组件合流显示、显式缓存/另存及本机续写；配置凭据由原生界面接收，关闭设置返回后重建页面缓存，不让新账号读取旧账号内容。
 - 现代 Google API35 镜像仅下载/核验/解包到忽略的 build/android-qa；新隔离 AVD 不修改全局 SDK、现有 AVD 或系统 provider。生成资产先列当前构建清单，仅将清单内资源编入 APK，不为清理执行源码或私人文件删除。
+
+### 受信 iframe 接入补充方案（用户“继续”确认，2026-10-11继续实施）
+
+目标：补齐原TrustedIframe显示能力，同时保留“APK主框架独占原生命令”的边界。不把frame-src从none改成任意HTTPS，也不借此加载远端Memos页面。
+
+- 来源基准是固定上游constants.ts：YouTube及nocookie、Vimeo、Spotify、SoundCloud、Loom、Google Maps、diagrams.net及draw.io的既有HTTPS嵌入路径。入口采用结构化URL核验，拒绝凭据、非默认端口、非名单路径、data/srcdoc及未知跳转。第三方页面资源/CDN按实际必要范围定向核查，不开放所有HTTPS或通配供应商域。
+- 远端子框架无WebMessagePort，不接触账号token/任意文件路径；默认sandbox限制导航/弹窗/下载及原生权限，继续禁用第三方Cookie。手机会访问这些外部服务，可能暴露IP和用户主动写入的嵌入地址；不是离线资源，也不能承诺国内线路均可用。
+- 文件选择需先补主框架专用入口：当前WebChrome回调只拿到主WebView.url，不能据此证明请求来自主框架。主页面附件入口改由现有受限port发起原生ActivityResult，返回私有资源ID/已核验数据，继续原附件处理管线；通用子框架文件选择拒绝。子框架摄像头/麦克风/定位/保存等均拒绝，不能因其处于主页面而继承权限。
+- 修改仅限local-ui构建级适配、现有ui原生承载、定向测试及文档；不修改上游生产组件、不变更凭据/Room/队列/生产/CI/CD、不删除数据。新入口确认后补协议与清单，默认入口仍须待整体验收。
+- 验收：原受信地址与恶意近似域/路径/跳转、子框架伪造port/文件选择/权限、SVG/HTML附件、加载失败/断网、主框架附件回归及实际WebView呈现。合成测试证明权限边界；真实第三方素材与网络另注明，不把占位或DOM存在当可播放成功。
+
+需要确认：允许按原受信名单访问第三方嵌入并补主框架专用文件入口，还是继续禁止嵌入并明确这一兼容缺口。确认前保持现有CSP/网络/文件权限不变。
+
+用户随后回复“继续”，确认实施此方案；不扩展到生产部署、提交推送或发布。先完成并验收文件入口，再启用嵌入网络。
+
+文件入口协议：仅主框架port的`platform.choose`接收accept/multiple，返回`files`资源描述（name=`picked/UUID`、filename、type、size），不返回content URI或路径。用户取消返回空数组，不改输入或笔记；用户选择期间不使用普通60秒数据操作超时，导航/销毁取消会话。原页面捕获顶层file input的click，以DataTransfer和原change事件继续所有已有文件处理，包括附件、正文图片和ZIP导入。
+
+新增运行时目录`filesDir/local-ui-picked/`，UUID.bin存原字节、UUID.json存名称/MIME/大小/SHA256；单次最多100文件、合计25MiB，索引只在复制完整后推进，读取重新核验。原文件不修改；复制不生成笔记/队列，不自动删除暂存数据，后续显式清理另按授权。文件服务的picked资源和既有附件均继续sandbox/nosniff保护，通用WebChrome文件回调拒绝，content/file访问关闭；先保持frame-src none直到边界测试通过。

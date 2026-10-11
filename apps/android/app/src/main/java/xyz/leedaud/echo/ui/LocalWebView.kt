@@ -43,6 +43,13 @@ class LocalWebView(private val activity: Activity, private val backend: LocalUiB
         fun safePath(uri: Uri): Boolean = trusted(uri) && !uri.path.orEmpty().contains('\\') && uri.path.orEmpty().split('/').none { it == "." || it == ".." }
         fun trustedDocument(uri: Uri): Boolean = safePath(uri) && !uri.path.orEmpty().startsWith("/file/")
             && !uri.path.orEmpty().startsWith("/assets/") && !uri.path.orEmpty().substringAfterLast('/').contains('.')
+        internal fun privateResourceReader(mainFrame: Boolean, headers: Map<String, String>): Boolean {
+            if (mainFrame) return false
+            val referrer = headers.entries.firstOrNull { it.key.equals("Referer", true) }?.value ?: return false
+            if (!trusted(Uri.parse(referrer))) return false
+            val origin = headers.entries.firstOrNull { it.key.equals("Origin", true) }?.value
+            return origin == null || origin == ORIGIN
+        }
         internal fun attachmentResponse(mime: String, file: File, range: String?): WebResourceResponse {
             val size = file.length()
             val headers = mutableMapOf("Content-Security-Policy" to "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:;",
@@ -74,14 +81,16 @@ class LocalWebView(private val activity: Activity, private val backend: LocalUiB
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         settings.allowFileAccess = false
-        settings.allowContentAccess = true
+        settings.allowContentAccess = false
         settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         settings.javaScriptCanOpenWindowsAutomatically = false
         settings.setSupportMultipleWindows(false)
         CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
         webChromeClient = object : WebChromeClient() {
-            override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean =
-                if (trustedDocument(Uri.parse(view.url ?: ""))) platform.choose(params, callback) else false
+            override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
+                callback.onReceiveValue(null)
+                return true
+            }
             override fun onPermissionRequest(request: PermissionRequest) { platform.microphone(request) }
             override fun onPermissionRequestCanceled(request: PermissionRequest) { platform.cancelMicrophone(request) }
         }
@@ -112,11 +121,12 @@ class LocalWebView(private val activity: Activity, private val backend: LocalUiB
                     && request.url.host in setOf("tiles.openfreemap.org", "tile.openstreetmap.org", "nominatim.openstreetmap.org") && request.method == "GET") return null
                 if (!safePath(request.url) || request.method != "GET") return denied()
                 val path = request.url.path.orEmpty().removePrefix("/")
-                if (path.startsWith("file/attachments/")) {
+                if (path.startsWith("file/attachments/") || path.startsWith("file/picked/")) {
+                    if (!privateResourceReader(request.isForMainFrame, request.requestHeaders)) return denied()
                     val parts = path.split('/')
                     if (parts.size != 4) return denied()
                     return runCatching {
-                        val (mime, file) = backend.attachmentFile("attachments/${parts[2]}")
+                        val (mime, file) = backend.attachmentFile("${parts[1]}/${parts[2]}")
                         attachmentResponse(mime, file, request.requestHeaders.entries.firstOrNull { it.key.equals("Range", ignoreCase = true) }?.value)
                     }.getOrElse { denied() }
                 }
@@ -130,6 +140,7 @@ class LocalWebView(private val activity: Activity, private val backend: LocalUiB
                 }.getOrElse { denied() }
             }
             override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                platform.cancelSelection()
                 generation++; channel?.close(); channel = null
             }
             override fun onPageFinished(view: WebView, url: String) {
