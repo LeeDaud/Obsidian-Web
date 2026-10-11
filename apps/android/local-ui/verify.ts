@@ -1,5 +1,5 @@
 import { chromium } from "../../../node_modules/@playwright/test/index.mjs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const origin = "http://127.0.0.1:3016";
@@ -14,12 +14,19 @@ try {
     if (new URL(route.request().url()).origin !== origin) { blocked.push(route.request().url()); return route.abort(); }
     return route.continue();
   });
+  const image = await readFile("upstream/memos/web/public/logo.webp");
+  await context.route("**/file/attachments/r-*/**", (route) => route.fulfill({ status: 200, contentType: "image/webp", body: image }));
   await context.addInitScript(() => {
     const calls: { command: string; input: any }[] = [];
     const user = { name: "users/device", username: "device", displayName: "本机", role: "USER", state: "NORMAL" };
     const time = "2026-10-09T00:00:00Z";
     const make = (name: string, content: string) => ({ name, content, creator: user.name, createTime: time, updateTime: time, state: "NORMAL", visibility: "PRIVATE", localRevision: 1 });
     const memos = [make("memos/fixture", "原文短记录"), make("memos/format", "## 原组件格式\n\n| 名称 | 值 |\n| --- | --- |\n| 表格 | 保留 |\n\n公式：$x^2$\n\n脚注[^1]\n\n[^1]: 原文脚注")];
+    const historyAttachment = `r-${"a".repeat(64)}`;
+    memos.push({ ...make("memos/r-history", '![历史图片](https://memos.example.test/file/attachments/source_1?download=1#view "原题")\n\n`/file/attachments/source_1`'),
+      attachments: [{ name: `attachments/${historyAttachment}`, filename: "历史图片.webp", type: "image/webp", size: "37158" }],
+      localMetadata: { remote: true, frozen: true, sourceOrigin: "https://memos.example.test", attachmentMappings: [{ name: "attachments/source_1", filename: "历史图片.webp", replacement: `/file/attachments/${historyAttachment}` }] }
+    } as any);
     const call = (command: string, input: any): any => {
       calls.push({ command, input });
       const method = command.split('/').pop();
@@ -78,6 +85,15 @@ try {
   }
   await page.locator('[data-memo-name="memos/fixture"]').waitFor();
   await page.locator('[data-memo-name="memos/format"] .katex').waitFor();
+  const historicalImage = page.locator('[data-memo-name="memos/r-history"] img[src*="/file/attachments/r-"]');
+  try { await historicalImage.waitFor(); }
+  catch (error) {
+    console.log(JSON.stringify(await page.evaluate(async () => ({ text: document.body.innerText, html: document.querySelector('[data-memo-name="memos/r-history"]')?.innerHTML, images: [...document.images].map((image) => image.src), memos: await (await fetch("/memos.api.v1.MemoService/ListMemos", { method: "POST", body: "{}" })).json() }))));
+    throw error;
+  }
+  await page.waitForFunction(() => document.querySelector<HTMLImageElement>('[data-memo-name="memos/r-history"] img')?.naturalWidth);
+  if (await page.locator('article').filter({ has: historicalImage }).locator('img[src*="/file/attachments/r-"]').count() !== 1) throw new Error("Historical inline image duplicated in attachment gallery");
+  if (!(await page.locator('[data-memo-name="memos/r-history"] code').innerText()).includes("/file/attachments/source_1")) throw new Error("Historical code text changed");
   const measurements = [];
   for (const width of [320, 390, 430]) {
     await page.setViewportSize({ width, height: 844 });

@@ -15,6 +15,10 @@ export function nativeAdapters() {
     },
     transform(code: string, id: string) {
       const file = id.replaceAll("\\", "/").split('?')[0];
+      if (file.endsWith("/utils/managed-attachment.ts")) {
+        code = inject(code, "const UID_PATTERN = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,34}[a-zA-Z0-9])?$/;",
+          "const UID_PATTERN = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,34}[a-zA-Z0-9])?|r-[a-f0-9]{64})$/;");
+      }
       if (file.endsWith("/MemoMetadata/Attachment/AttachmentListEditor.tsx")) {
         const start = code.indexOf("const AttachmentItemActions:");
         const end = code.indexOf("const AttachmentItemCard:", start);

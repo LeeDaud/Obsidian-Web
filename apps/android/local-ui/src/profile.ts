@@ -1,10 +1,18 @@
 import { unified } from "../../../../upstream/memos/web/node_modules/unified/index.js";
 import remarkParse from "../../../../upstream/memos/web/node_modules/remark-parse/index.js";
 import { buildRemarkPlugins } from "@/components/MemoContent/pipeline";
+import { projectManagedImages } from "./managed-images";
 const processor = unified().use(remarkParse).use(buildRemarkPlugins());
 const cache = new Map<string, { body: string; tags: string[]; property: Record<string, boolean> }>();
 export function profileMemo(memo: any): any {
-  if (memo.localMetadata?.remote) return memo;
+  if (memo.localMetadata?.remote) {
+    const origin = memo.localMetadata.sourceOrigin;
+    const mappings = memo.localMetadata.attachmentMappings;
+    if (typeof origin === "string" && Array.isArray(mappings)) {
+      return { ...memo, content: projectManagedImages(memo.content, mappings, origin) };
+    }
+    return memo;
+  }
   let parsed = cache.get(memo.name);
   if (!parsed || parsed.body !== memo.content) {
     const tags = new Set<string>();

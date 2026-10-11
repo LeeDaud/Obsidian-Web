@@ -66,15 +66,13 @@ class LocalMemosSource(private val context: Context,
             raw.opt(key)?.let { data.put(key, it) }
         }
         data.put("name", name).put("creator", "users/device").put("visibility", "PRIVATE")
-        var content = memo.body
+        val mappings = JSONArray()
         val files = memo.attachments.map { file ->
             val projected = resource("attachments", file.name, active.scope)
-            val old = "/file/${file.name}/${android.net.Uri.encode(file.filename)}"
-            val local = "/file/$projected/${android.net.Uri.encode(file.filename)}"
-            content = content.replace("${active.origin}$old", local).replace(old, local)
+            mappings.put(JSONObject().put("name", file.name).put("filename", file.filename).put("replacement", "/file/$projected"))
             JSONObject().put("name", projected).put("filename", file.filename).put("type", file.mime).put("size", file.size.toString()).put("memo", name)
         }
-        data.put("content", content).put("attachments", JSONArray(files))
+        data.put("content", memo.body).put("attachments", JSONArray(files))
         val relations = data.optJSONArray("relations") ?: JSONArray()
         for (i in 0 until relations.length()) {
             val relation = relations.getJSONObject(i)
@@ -85,7 +83,8 @@ class LocalMemosSource(private val context: Context,
         }
         data.put("relations", relations)
         data.optString("parent").takeIf { it.startsWith("memos/") }?.let { data.put("parent", resource("memos", it, active.scope)) }
-        return data.put("localMetadata", JSONObject().put("remote", true).put("frozen", true).put("offline", offline).put("scope", active.scope))
+        return data.put("localMetadata", JSONObject().put("remote", true).put("frozen", true).put("offline", offline).put("scope", active.scope)
+            .put("sourceOrigin", active.origin).put("attachmentMappings", mappings))
     }
     @Synchronized fun get(name: String): JSONObject {
         snapshot()

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { internalizeManagedImages } from "./src/managed-images";
+import { internalizeManagedImages, projectManagedImages } from "./src/managed-images";
 const file = { name: "attachments/abc-123", filename: "图 片.png" };
 const origin = "https://echo-app.local";
 const rewrite = (value: string) => internalizeManagedImages(value, [file], origin);
@@ -12,3 +12,16 @@ assert.equal(rewrite('![alt /file/attachments/abc-123](/file/attachments/abc-123
 const foreign = '![x](https://foreign.test/file/attachments/abc-123) ![x](/file/attachments/unknown)';
 assert.equal(rewrite(foreign), foreign);
 console.log("PASS managed image destinations (6 assertions)");
+const project = (value: string) => projectManagedImages(value, [{ name: "attachments/source_1", filename: "图 片.png", replacement: "/file/attachments/r-scoped" }], "https://memos.example.test");
+assert.equal(project("![a](/file/attachments/source_1)"), "![a](/file/attachments/r-scoped)");
+assert.equal(project('![a](https://memos.example.test/file/attachments/source_1?download=1#view "title")'), '![a](/file/attachments/r-scoped "title")');
+assert.equal(project('![a][x]\n\n[x]: /file/attachments/source_1/%E5%9B%BE%20%E7%89%87.png?x=1'), '![a][x]\n\n[x]: /file/attachments/r-scoped');
+const historicalCode = '`/file/attachments/source_1`\n\n```md\n![a](/file/attachments/source_1)\n```';
+assert.equal(project(historicalCode), historicalCode);
+const unowned = '![a](https://foreign.test/file/attachments/source_1) ![a](/file/attachments/source_12) ![a](/file/attachments/source_1/wrong.png)';
+assert.equal(project(unowned), unowned);
+const credentials = '![a](https://user:pass@memos.example.test/file/attachments/source_1) ![a](//foreign.test/file/attachments/source_1)';
+assert.equal(project(credentials), credentials);
+assert.equal(project('![alt /file/attachments/source_1](/file/attachments/source_1 "title /file/attachments/source_1")'), '![alt /file/attachments/source_1](/file/attachments/r-scoped "title /file/attachments/source_1")');
+assert.equal(project('![a](</file/attachments/source_1/图%20片.png>)'), '![a](</file/attachments/r-scoped>)');
+console.log("PASS historical image destinations (8 assertions)");
