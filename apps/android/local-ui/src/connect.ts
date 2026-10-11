@@ -14,6 +14,7 @@ import { browserFetch } from "./platform";
 import { rewriteLocalFiles } from "./drafts";
 import { profileMemo } from "./profile";
 import { publicResource } from "./public-resources";
+import { internalizeManagedImages } from "./managed-images";
 const snapshots = new Map<string, any[]>();
 let queryWorker: Worker | undefined;
 const queries = new Map<string, { resolve: (names: string[]) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
@@ -87,7 +88,8 @@ export const localFetch: typeof fetch = async (input, init) => {
     if (command === "memos.api.v1.MemoService/CreateMemo" || command === "memos.api.v1.MemoService/UpdateMemo") {
       (payload as any).editorKey = activeEditorKey;
       (payload as any).changeToken = editorChangeToken(activeEditorKey);
-      if (typeof (payload as any).memo?.content === "string") (payload as any).memo.content = rewriteLocalFiles((payload as any).memo.content);
+      if (typeof (payload as any).memo?.content === "string") (payload as any).memo.content = internalizeManagedImages(
+        rewriteLocalFiles((payload as any).memo.content), (payload as any).memo.attachments ?? [], location.origin);
     }
   } else if (url.pathname === "/api/echo/v1/status") command = "echo.status";
   else if (url.pathname === "/api/echo/v1/memo-statuses") { command = "echo.memo-statuses"; payload = body ? JSON.parse(String(body)) : {}; }

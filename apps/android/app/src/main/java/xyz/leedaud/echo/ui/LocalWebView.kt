@@ -124,7 +124,7 @@ class LocalWebView(private val activity: Activity, private val backend: LocalUiB
                 if (path.startsWith("file/attachments/") || path.startsWith("file/picked/")) {
                     if (!privateResourceReader(request.isForMainFrame, request.requestHeaders)) return denied()
                     val parts = path.split('/')
-                    if (parts.size != 4) return denied()
+                    if (parts.size != 4 && !(parts.size == 3 && parts[1] == "attachments")) return denied()
                     return runCatching {
                         val (mime, file) = backend.attachmentFile("${parts[1]}/${parts[2]}")
                         attachmentResponse(mime, file, request.requestHeaders.entries.firstOrNull { it.key.equals("Range", ignoreCase = true) }?.value)

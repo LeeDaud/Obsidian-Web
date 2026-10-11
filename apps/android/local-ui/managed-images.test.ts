@@ -1,0 +1,14 @@
+import assert from "node:assert/strict";
+import { internalizeManagedImages } from "./src/managed-images";
+const file = { name: "attachments/abc-123", filename: "图 片.png" };
+const origin = "https://echo-app.local";
+const rewrite = (value: string) => internalizeManagedImages(value, [file], origin);
+assert.equal(rewrite('![alt](/file/attachments/abc-123 "title")'), '![alt](echo-attachment:abc-123 "title")');
+assert.equal(rewrite('![alt][image]\n\n[image]: /file/attachments/abc-123'), '![alt][image]\n\n[image]: echo-attachment:abc-123');
+assert.equal(rewrite('![alt](/file/attachments/abc-123/%E5%9B%BE%20%E7%89%87.png)'), '![alt](echo-attachment:abc-123)');
+const literal = '`/file/attachments/abc-123`\n\n```md\n![x](/file/attachments/abc-123)\n```';
+assert.equal(rewrite(literal), literal);
+assert.equal(rewrite('![alt /file/attachments/abc-123](/file/attachments/abc-123 "title /file/attachments/abc-123")'), '![alt /file/attachments/abc-123](echo-attachment:abc-123 "title /file/attachments/abc-123")');
+const foreign = '![x](https://foreign.test/file/attachments/abc-123) ![x](/file/attachments/unknown)';
+assert.equal(rewrite(foreign), foreign);
+console.log("PASS managed image destinations (6 assertions)");

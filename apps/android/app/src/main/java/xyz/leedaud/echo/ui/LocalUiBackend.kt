@@ -132,7 +132,7 @@ class LocalUiBackend(private val context: Context, private val repository: NoteR
             relations.put(JSONObject().put("type", "REFERENCE").put("memo", JSONObject().put("name", name(child)).put("snippet", child.body.take(200)))
                 .put("relatedMemo", JSONObject().put("name", name(value)).put("snippet", value.body.take(200))))
         }
-        val body = value.attachments.fold(value.body) { text, ref -> text.replace("echo-attachment:${ref.id}", "/file/attachments/${ref.id}/${android.net.Uri.encode(ref.name)}") }
+        val body = value.attachments.fold(value.body) { text, ref -> text.replace("echo-attachment:${ref.id}", "/file/attachments/${ref.id}") }
         return JSONObject().put("name", name(value)).put("creator", "users/device").put("content", body).put("snippet", body.take(200))
             .put("createTime", time(value.created)).put("updateTime", time(value.updated)).put("state", if (value.archived) "ARCHIVED" else "NORMAL")
             .put("visibility", "PRIVATE").put("pinned", value.pinned).put("tags", JSONArray(tags(body)))

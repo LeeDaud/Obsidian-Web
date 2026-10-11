@@ -718,6 +718,8 @@ P0确认需求 → P1技术可行性 → P2离线记录闭环 → P3直投GitHub
 
 用户随后回复“继续”，确认实施此方案；不扩展到生产部署、提交推送或发布。先完成并验收文件入口，再启用嵌入网络。
 
+2026-10-11用户要求“提交，并继续推进图片嵌入以及其他内容”。已提交文件入口，继续沿用E1b范围：支持原无文件名图片地址；用原有micromark的目的地址token仅转换已关联本机附件引用，保留代码/alt/title原字符和既有Markdown/队列存储格式；验证系统图片选择、正文插入/附件去重、重开和导出/导入字节。远端网络、默认入口、发布仍不扩展。
+
 文件入口协议：仅主框架port的`platform.choose`接收accept/multiple，返回`files`资源描述（name=`picked/UUID`、filename、type、size），不返回content URI或路径。用户取消返回空数组，不改输入或笔记；用户选择期间不使用普通60秒数据操作超时，导航/销毁取消会话。原页面捕获顶层file input的click，以DataTransfer和原change事件继续所有已有文件处理，包括附件、正文图片和ZIP导入。
 
 新增运行时目录`filesDir/local-ui-picked/`，UUID.bin存原字节、UUID.json存名称/MIME/大小/SHA256；单次最多100文件、合计25MiB，索引只在复制完整后推进，读取重新核验。原文件不修改；复制不生成笔记/队列，不自动删除暂存数据，后续显式清理另按授权。文件服务的picked资源和既有附件均继续sandbox/nosniff保护，通用WebChrome文件回调拒绝，content/file访问关闭；先保持frame-src none直到边界测试通过。

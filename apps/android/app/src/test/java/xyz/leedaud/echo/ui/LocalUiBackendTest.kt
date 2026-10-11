@@ -203,6 +203,35 @@ class LocalUiBackendTest {
         }
         assertTrue(repo.deliveries().isEmpty())
     }
+    @Test fun inlineImageProjectionMarkdownAndArchiveRoundtripPreserveOneImage() {
+        val started = backend.request("memos.api.v1.AttachmentService/UploadAttachment", JSONObject().put("spec", JSONObject()
+            .put("attachment", JSONObject().put("filename", "图 片.webp").put("type", "image/webp")).put("totalSize", "3"))) as JSONObject
+        val upload = backend.request("memos.api.v1.AttachmentService/UploadAttachment", JSONObject().put("uploadId", started.getString("uploadId"))
+            .put("writeOffset", "0").put("data", java.util.Base64.getEncoder().encodeToString("abc".toByteArray())).put("finishWrite", true)) as JSONObject
+        val attachment = upload.getJSONObject("attachment")
+        val id = attachment.getString("name").removePrefix("attachments/")
+        val original = "前文\n\n![图片](echo-attachment:$id)\n\n后文"
+        val result = backend.request("memos.api.v1.MemoService/CreateMemo", JSONObject().put("memo", JSONObject().put("content", original)
+            .put("visibility", "PRIVATE").put("attachments", org.json.JSONArray().put(attachment)))) as JSONObject
+        assertEquals("前文\n\n![图片](/file/attachments/$id)\n\n后文", result.getString("content"))
+        val note = repo.notes().single()
+        val markdown = repo.file(note.file).readText()
+        assertEquals(1, Regex("!\\[").findAll(markdown).count())
+        assertFalse(markdown.contains("echo-attachment:")); assertFalse(markdown.contains("/file/attachments/"))
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val exports = LocalUiExports(context, repo)
+        val archive = exports.create(listOf(note), true)
+        val importer = LocalUiImports(repo)
+        val parsed = importer.read(exports.resolve(archive.getString("name")).second)
+        repo.setTarget(Target("synthetic", "owner", "repo", "main", 1, true))
+        val report = importer.commit(parsed, "DUPLICATE")
+        assertEquals(1, report.getInt("created")); assertEquals(0, report.getInt("failed"))
+        val copied = repo.notes().first { it.id != note.id }
+        assertEquals(1, copied.attachments.size)
+        assertEquals(original.replace(id, copied.attachments.single().id), copied.body)
+        assertEquals("abc", repo.file(copied.attachments.single().file).readText())
+        assertTrue(repo.deliveries().isEmpty())
+    }
     @Test fun markdownExportPreservesNotesCreatedInTheSameSecond() {
         repo.save(Draft(body = "same second A", created = 1000), authorizeDelivery = false)
         repo.save(Draft(body = "same second B", created = 1000), authorizeDelivery = false)

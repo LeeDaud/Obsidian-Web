@@ -318,6 +318,16 @@ CI/CD、生产部署、HTTPS、服务器系统服务均未新增或启用。Obsi
 - 使用本机 Chrome 访问正式 HTTPS 原版 Memos，390×844px 移动视口，登录 token 只在进程内存中传递。页面实际出现“已投递”，所属 DOM 位于 `memo-header-meta` 时间戳区域；可见笔记查询合并为 1 次请求。
 - 等待三点菜单挂载后核验：已投递笔记有“续写”菜单项，没有“投递到 Obsidian”。真实编辑器的记录类型为 2 个等宽按钮，整行占满，触控高度至少 44px。页面无横向溢出，pageerror=0，提交/创建/更新请求=0。
 - 本轮原版页面的状态/菜单/布局验收成功，不再沿用上一轮因公网超时未完成的结论。原笔记更新和关联续写仍由本地行为测试核验；生产只读检查没有实际保存、创建或重投内容，手机硬件与电脑逐条接收仍待真实使用。
+# 2026-10-11 文件入口提交与正文图片推进
+
+- 用户要求“提交，并继续推进图片嵌入以及其他内容”，已创建本地提交1d82e1c `feat: 接入安卓主框架专用文件选择`，未推送。之后的图片修复/测试为新工作树改动，未提交或重发APK；生产、凭据、Room/队列存储格式及默认入口不变。
+- 原Web `buildManagedAttachmentMarkdown`生成不带文件名的`/file/attachments/ID`。本机文件服务补这一地址，仍执行来源、ID、摘要与sandbox校验；memo投影中的内部echo附件token改为该裸地址，避免编码文件名影响原managed图片识别/去重。保存前使用原有micromark的resource/definition destination token，仅转换已关联本机附件URL为原内部token，保留代码、alt和title原字节，不重新序列化Markdown。6项断言覆盖正文/引用式图片、Unicode文件名、代码、alt/title和未知/外源地址。
+- 真实测试进一步发现原正文Image的no-referrer与私有文件读取约束冲突；仅构建级适配本机附件src采用same-origin，外部图片仍no-referrer，不放宽读取策略或修改上游源码。最初失败没有作为成功；模拟器启动残留选择器、根目录重名和图片网格扩展无障碍标签也已在测试脚本中纠正。
+- `verify-images-android.ts`在API35/WebView124真实DocumentsUI选择项目公开logo.webp：原“插入图片”与“添加附件”两个入口均经新主框架选择器，暂存、保存、重开，各只显示1图；取无文件名资源并逐字节对照原37,158字节一致。图片附件原画廊打开、实际解码、关闭通过，pageerror0。截图/结果在忽略的app/build/android-qa/local-ui/images，已目视正文/附件布局，无重复图或内容重叠。
+- Native新增图片投影→持久Markdown单图→ZIP图片DUPLICATE往返测试：引用ID正确改写、附件字节一致，启用合成target时导入仍不入队；这不是实际系统ZIP导入或所有上游档案格式验证。完整`testDebugUnitTest lintDebug assembleDebug`通过，73项0失败，Lint0错误/17警告，候选TypeScript及6项目的地址断言通过；保留原Vite警告。
+- ss-review局部：没有新增图片UI或重绘，继续原Image/AttachmentGallery/PreviewImageDialog及主题；仅本机读取与保存适配，正文/附件两张实机截图和画廊实际加载已核对。整体仍Needs Improvement：真实账号源图片、系统ZIP导入、iframe资源策略/播放、全部格式与功能设备矩阵未闭环，不切默认入口或宣称完整1:1。
+- 本地验收APK SHA256 `1fdc7e27730d448fe77f58151cd1253409464f9a7d22772928963bfafbf5bbc8`；不是已发布v0.4.0-preview2附件，不混用下载包状态。文件选择与图片测试只使用合成文本和项目公开logo，没有读取私人素材、发送真实笔记或改CI/CD。
+
 # 2026-10-11 主框架专用文件入口
 
 - 中断后核对git仅plan/verification有待确认方案记录，无半完成代码；沿用用户随后“继续”确认的补充方案，仅本地实现。默认入口、发布包、原上游/生产服务、Room schema及凭据不变，无提交推送或部署。

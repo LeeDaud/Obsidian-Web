@@ -55,6 +55,8 @@ export function nativeAdapters() {
         code = inject(code, "      anchor.click();", "      await saveBlob(blob, buildMemoShareImageFileName(memo.name));");
       }
       if (file.endsWith("/lib/memo-export.ts")) code = inject(code, "  downloadFileFromUrl(url,", "  await downloadFileFromUrl(url,");
+      if (file.endsWith("/MemoContent/markdown/Image.tsx")) code = inject(code, 'referrerPolicy="no-referrer"',
+        'referrerPolicy={typeof props.src === "string" && (props.src.startsWith("/file/attachments/") || props.src.startsWith(window.location.origin + "/file/attachments/")) ? "same-origin" : "no-referrer"}');
       if (file.endsWith("/MemoContent/constants.ts")) code = inject(code, 'const HANDOFF_LINK_PROTOCOLS = ["tel", "sms"];', 'const HANDOFF_LINK_PROTOCOLS = ["tel", "sms", "echo"];');
       return code;
     },
