@@ -65,6 +65,8 @@ class LocalUiExports(private val context: Context, private val repository: NoteR
                     put("memos/${note.id}.json", JSONObject().put("uid", note.id).put("creator", "device").put("createTime", Instant.ofEpochMilli(note.created).toString())
                         .put("updateTime", Instant.ofEpochMilli(note.updated).toString()).put("state", if (note.archived) "ARCHIVED" else "NORMAL").put("visibility", "PRIVATE")
                         .put("pinned", note.pinned).put("contentPath", "memos/${note.id}.md").put("relations", relations).put("attachments", attachments)
+                        .put("echoAndroid", JSONObject().put("version", 1).put("todo", note.todo).put("parent", note.parentId ?: "")
+                            .put("referenceIds", JSONArray(note.referenceIds.orEmpty())))
                         .apply { note.location?.let { runCatching { put("location", JSONObject(it)) } } }.toString().toByteArray())
                 } else repository.bundle(note, markdownPath(note), note.parentId?.let { parent -> repository.deliveries().find { it.noteId == parent && it.state == "verified" }?.receipt?.path })
                     .forEach { put(it.path, java.util.Base64.getDecoder().decode(it.base64)) }

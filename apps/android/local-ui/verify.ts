@@ -32,6 +32,24 @@ try {
       const method = command.split('/').pop();
       if (command === "local.bootstrap") return { drafts: {} };
       if (command === "local.list") return { memos, next: -1 };
+      if (command === "local.memos-copy-source") return { content: memos.find((memo) => memo.name === "memos/r-history")!.content,
+        version: "synthetic-version", origin: "https://memos.example.test", attachments: [{ name: "attachments/source_1", filename: "历史图片.webp" }] };
+      if (command === "local.memos-copy") {
+        if (input.version !== "synthetic-version" || input.destinations.length !== 1 || input.destinations[0].name !== "attachments/source_1") throw new Error("Copy parser protocol invalid");
+        return { key: "users/device-home-memo-editor", value: JSON.stringify({ kind: "memos.editor-cache", version: 4,
+          content: '![历史图片](/file/attachments/copied-image "原题")\n\n`/file/attachments/source_1`', attachments: [], location: null }) };
+      }
+      if (command === "local.import-source" && input.uploadId === "synthetic-cancel") (window as any).__importAbort.abort();
+      if (command === "local.import-source") return input.index === 0 ? { uid: "imported", content: "![图](/file/attachments/import-image?x=1)\n\n`/file/attachments/import-image`",
+        origin: location.origin, sha256: "synthetic-hash", attachments: [{ name: "attachments/import-image", filename: "image.webp" }] } : { done: true };
+      if (command === "local.import-destinations") {
+        if (input.sha256 !== "synthetic-hash" || input.destinations.length !== 1 || input.destinations[0].name !== "attachments/import-image") throw new Error("Import parser protocol invalid");
+        return { saved: true };
+      }
+      if (command === "memos.api.v1.UserService/ImportMemos") {
+        if (!input.parsedDestinations) throw new Error("Import bypassed parsed destinations");
+        return { report: { created: 1, updated: 0, skipped: 0, failed: 0, failures: [] } };
+      }
       if (command === "platform.theme") return {};
       if (command === "local.draft" && (window as any).__failLocalDraft) throw new Error("Synthetic draft failure");
       if (command === "local.draft" || command === "local.clear-draft") return { saved: true };
@@ -139,6 +157,24 @@ try {
   await attachmentMenu.click();
   await page.getByRole("menuitem", { name: "移除", exact: true }).click();
   await attachmentMenu.waitFor({ state: "detached" });
+  const historyCard = page.locator("article").filter({ has: page.locator('[data-memo-name="memos/r-history"]') });
+  await historyCard.getByRole("button", { name: "更多", exact: true }).click();
+  await page.getByRole("menuitem", { name: "另存设备草稿", exact: true }).click();
+  await page.waitForFunction(() => document.querySelector(".cm-content")?.textContent?.includes("/file/attachments/copied-image"));
+  if (!(await page.locator(".cm-content").innerText()).includes("`/file/attachments/source_1`")) throw new Error("Copy modified code address");
+  const importReport = await page.evaluate(async () => {
+    const response = await fetch("/memos.api.v1.UserService/ImportMemos", { method: "POST", body: JSON.stringify({ uploadId: "synthetic-import", writeOffset: "0", finishWrite: true, conflictPolicy: "DUPLICATE" }) });
+    return response.json();
+  });
+  if (importReport.report?.created !== 1) throw new Error("Parsed import integration failed");
+  const cancelled = await page.evaluate(async () => {
+    const controller = new AbortController(); (window as any).__importAbort = controller;
+    const before = (window as any).__localCalls.length;
+    await fetch("/memos.api.v1.UserService/ImportMemos", { method: "POST", signal: controller.signal,
+      body: JSON.stringify({ uploadId: "synthetic-cancel", writeOffset: "0", finishWrite: true, conflictPolicy: "DUPLICATE" }) });
+    return (window as any).__localCalls.slice(before).map((call: any) => call.command);
+  });
+  if (cancelled.includes("local.import-destinations") || cancelled.includes("memos.api.v1.UserService/ImportMemos")) throw new Error("Cancelled parsing still committed import");
   if (errors.length) throw new Error(`Page errors: ${errors.join(", ")}`);
   await writeFile(`${out}/browser-verification.json`, JSON.stringify({ measurements, errors, blocked, commands }, null, 2));
   console.log(JSON.stringify({ result: "passed", measurements, errors, blocked: blocked.length, commands }));

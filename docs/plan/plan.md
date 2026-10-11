@@ -751,3 +751,23 @@ P0确认需求 → P1技术可行性 → P2离线记录闭环 → P3直投GitHub
 实施顺序：既有回归验收 -> 历史图片/ZIP目的地址 -> 元数据保真 -> 定位/受信嵌入 -> 完整设备/视觉收尾。用户已确认，已更新todo并执行跨文件改动。
 
 历史显示投影契约：`localMetadata.sourceOrigin`是已登录实例的公开来源域名，`attachmentMappings`仅包含当前memo关联附件的公开资源name、filename、replacement（账号隔离本机/file路径）。原生返回未改写正文；JS用micromark目的地址token转换后再交给原阅读器，并按现有registerMetadata规则从protobuf响应移除适配字段。不传token、URI或私有路径，不将此契约当作原Memos写入或离线复制完成。原managed-attachment UID校验的APK适配仅额外接受`r-[a-f0-9]{64}`，不泛化为任意字符串。
+
+2026-10-11 C1b协议：主框架micromark生成`destinations:[{start,end,name}]`（UTF-16偏移）；原生用固定CommonMark依赖解码实际源片段，再核验边界/顺序/来源域名/当前附件归属及文件名，不信任JS提供私有路径。`local.memos-copy-source`仅返回已完整缓存当前版本的正文/公开附件/来源/version；`local.memos-copy`核验version后才复制、登记附件私有索引并保存草稿，不入队。`local.import-source`按uploadId/index逐条返回已完整暂存ZIP正文/公开附件/hash；`local.import-destinations`核验hash和跨度并用AtomicFile保存在现有uploads下`<uploadId>-<memoUID>.destinations`。新候选ImportMemos提交携带parsedDestinations=true，要求每条计划与ZIP正文摘要一致；prepare期间取消不继续提交，已开始提交不能承诺撤回。
+
+不新增目录、Room字段或外网访问；现有uploads下解析计划与源ZIP同生命周期，不自动删除。内存仅缓存当前一个经原生验证的暂存档案（解包仍有现有容量上限）；旧未带parsedDestinations的本地接口/测试保留历史带文件名替换兼容，不作为新解析验收。ZIP新解析目前只接受根相对或本机来源地址，无法确认来源的外部绝对链接不改写；所有档案来源/元数据保真与崩溃中断恢复继续C2，不冒充完成。
+
+### C2 导入中断恢复细化（2026-10-11，沿用已确认C2，用户“开始优化”继续授权）
+
+- 先实施可靠性，不扩大到GitLab/生产/默认入口。现有uploads/<uploadId>.json追加可选importSession（version=1、档案摘要、冲突策略、每个源UID对应的固定目标ID/初始目标摘要/阶段与已完成结果）；旧日志无此字段按新会话初始化，Room schema和笔记结构不变。目录沿用现有uploads，日志与ZIP生命周期相同，不自动删除。
+- 在创建任何正式笔记前AtomicFile持久化全部目标ID和目标基线。DUPLICATE重试使用同一ID；完成条目不重写。REPLACE/未完成条目在处理前比较目标完整快照摘要；若目标变化或先前写入尚未确认，拒绝覆盖并报告不确定，不宣称原内容未变，也不另建副本。更换冲突策略/档案不能复用已开始会话。
+- 每条保存完成后更新持久检查点并累计稳定结果。仍是逐条导入，不冒充整包事务；在正式笔记已写入但完成检查点尚未落盘的窗口，优先保留记录并报告需检查，而不是自动猜测或回滚。未登记的中断附件可能留在私有存储，不自动删除，显式清理另授权。
+- 修改现有导入器/后端日志衔接及合成故障注入测试，继续不自动投递。验收：首条完成后中断/重开、保存与完成记录之间中断、同包重试/策略改变/目标被编辑、旧无会话日志、附件字节与关联ID稳定；最后执行测试、类型检查、Lint和构建。元数据保真、分页/诊断、定位/嵌入及真机门槛按既有C2–C4后续推进。
+
+### C2b 时间与本机关系保真（沿用已确认C2，2026-10-11继续优化）
+
+- 使用现有Draft.updatedOverride和AttachmentRef.created恢复原时间，不改变Room/笔记存储结构。旧档案缺updateTime或附件createTime时回退笔记createTime；无效时间/文件名在写入前拒绝该条。归档恢复保留源显示文件名，不把档案恢复当作新手机选择；私有副本路径沿用现有时间戳规则，源文件不改。
+- Memos 1.0标准REFERENCE列表保持兼容，不把本机续写错误导出成Memos评论parent。每条JSON新增可选echoAndroid（version=1、todo、parent、referenceIds），仅记录公开源UID和模式；原Memos未知字段读取可忽略。导入时按已固定ID映射恢复该扩展，旧Memos档案从标准parent/REFERENCE和正文任务语法读取。未知扩展版本拒绝，不虚构与所有第三方导入器的运行验收。
+- 自引用、非法或缺失目标关系不静默丢弃；档案内目标映射稳定，包外只允许已有未移除本机笔记。修正NoteRepository.save父关系变化被无操作判断吞掉的问题，不修改冻结记录、已授权队列或历史文件。
+- 增加时间/Unicode附件名/字节、待办/父子/多引用往返、旧缺字段、坏时间/缺关系拒绝及父关系更新回归。分组和媒体元数据仍留C2后续，不宣称全部元数据保真已完成。
+
+实现精度遵循已有Long毫秒字段：保留时间点而非原RFC3339时区拼写，纳秒尾数不持久化。旧档案任务模式用现有CommonMark AST的实际ListItem读取，代码示例不视为待办；包内父关系循环及依赖该循环的条目拒绝。部分条目在实际文件写入失败后仍可能留下未完成关联，继续作为C2c验收缺口，不冒充整包原子恢复。

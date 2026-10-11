@@ -23,6 +23,14 @@ class LocalUiBackend(private val context: Context, private val repository: NoteR
     private val gson = Gson()
     private val exports = LocalUiExports(context, repository)
     private val imports = LocalUiImports(repository)
+    private var stagedImport: Pair<String, LocalUiImports.Archive>? = null
+    private fun importArchive(id: String): LocalUiImports.Archive {
+        if (!Regex("[a-f0-9-]{36}").matches(id)) throw LocalUiFailure("导入标识无效")
+        val state = json(File(root, "uploads/$id.json"))
+        if (state.optString("purpose") != "import" || state.optLong("offset", -1) != state.optLong("size", -2)) throw LocalUiFailure("导入尚未完整暂存")
+        if (stagedImport?.first != id) stagedImport = id to imports.read(File(root, "uploads/$id.bin"))
+        return stagedImport!!.second
+    }
     private fun collection(kind: String) = json(File(root, "$kind.json"))
     private fun collectionWrite(kind: String, data: JSONObject) = write(File(root, "$kind.json"), data)
     private fun space(name: String): JSONObject {
@@ -280,31 +288,80 @@ class LocalUiBackend(private val context: Context, private val repository: NoteR
         "local.account" -> remote?.account() ?: JSONObject()
         "local.export-note" -> exports.create(listOf(note(input.getString("name"))), false)
         "local.export-archive" -> exports.create(repository.notes(), true)
+        "local.import-source" -> {
+            val archive = importArchive(input.getString("uploadId"))
+            val index = input.optInt("index")
+            if (index !in 0..archive.memos.size) throw LocalUiFailure("导入条目无效")
+            if (index == archive.memos.size) JSONObject().put("done", true)
+            else {
+                val memo = archive.memos[index]
+                val body = archive.entries.getValue(memo.getString("contentPath")).toString(Charsets.UTF_8)
+                val files = memo.optJSONArray("attachments") ?: JSONArray()
+                JSONObject().put("uid", memo.getString("uid")).put("content", body).put("sha256", digest(body.toByteArray()))
+                    .put("origin", LocalWebView.ORIGIN).put("attachments", JSONArray((0 until files.length()).map { i ->
+                        val file = files.getJSONObject(i); JSONObject().put("name", "attachments/${file.getString("uid")}").put("filename", file.getString("filename"))
+                    }))
+            }
+        }
+        "local.import-destinations" -> {
+            val id = input.getString("uploadId"); val archive = importArchive(id)
+            val memo = archive.memos.find { it.getString("uid") == input.getString("uid") } ?: throw LocalUiFailure("导入条目不存在")
+            val body = archive.entries.getValue(memo.getString("contentPath")).toString(Charsets.UTF_8)
+            if (input.getString("sha256") != digest(body.toByteArray())) throw LocalUiFailure("导入正文已变化")
+            val files = memo.optJSONArray("attachments") ?: JSONArray()
+            val mappings = (0 until files.length()).associate { i -> val file = files.getJSONObject(i)
+                "attachments/${file.getString("uid")}" to (file.getString("filename") to "verified") }
+            ManagedAttachmentDestinations.rewrite(body, input.getJSONArray("destinations"), mappings, LocalWebView.ORIGIN)
+            write(File(root, "uploads/$id-${memo.getString("uid")}.destinations"), input)
+            JSONObject().put("saved", true)
+        }
         "memos.api.v1.UserService/ImportMemos" -> {
             val request = JSONObject(input.toString())
             input.optJSONObject("spec")?.let { spec -> request.put("spec", JSONObject().put("attachment", JSONObject().put("filename", "memos-import.zip").put("type", "application/zip")).put("totalSize", spec.getString("totalSize")).put("purpose", "import")) }
             val result = upload(request)
             if (input.optBoolean("finishWrite")) {
-                val id = input.getString("uploadId"); val source = File(root, "uploads/$id.bin")
-                val archive = imports.read(source)
+                val id = input.getString("uploadId")
+                val archive = importArchive(id)
                 if (input.optBoolean("validateOnly")) result.put("plan", imports.plan(archive))
                 else {
                     val journal = File(root, "uploads/$id.json"); val state = json(journal)
-                    val report = state.optJSONObject("report") ?: imports.commit(archive, input.optString("conflictPolicy", "SKIP"))
+                    val plans = if (input.optBoolean("parsedDestinations")) archive.memos.associate { memo ->
+                        val uid = memo.getString("uid"); val saved = json(File(root, "uploads/$id-$uid.destinations"))
+                        val body = archive.entries.getValue(memo.getString("contentPath"))
+                        if (saved.optString("sha256") != digest(body)) throw LocalUiFailure("导入正文引用尚未核验")
+                        uid to saved.getJSONArray("destinations")
+                    } else emptyMap()
+                    val policy = input.optString("conflictPolicy", "SKIP")
+                    val session = state.optJSONObject("importSession") ?: JSONObject()
+                    if (session.has("policy") && session.getString("policy") != policy) throw LocalUiFailure("导入已开始，不能更换策略，请重新暂存")
+                    val oldReport = state.optJSONObject("report")
+                    val report = oldReport?.takeIf { it.optInt("failed") == 0 } ?: imports.commit(archive, policy, plans, session) { saved ->
+                        write(journal, state.put("importSession", saved))
+                    }
                     write(journal, state.put("complete", true).put("report", report)); result.put("report", report)
                 }
             }
             result
         }
         "local.memos-cache" -> { remote?.saveOffline(input.getString("name")) ?: throw LocalUiFailure("原账号已断开"); JSONObject().put("saved", true) }
+        "local.memos-copy-source" -> {
+            val cached = remote?.cached(input.getString("name")) ?: throw LocalUiFailure("请先离线保存")
+            JSONObject().put("content", cached.memo.body).put("version", cached.memo.version).put("origin", remote.account()!!.getString("origin"))
+                .put("attachments", JSONArray(cached.files.map { JSONObject().put("name", it.attachment.name).put("filename", it.attachment.filename) }))
+        }
         "local.memos-copy" -> {
             val name = input.getString("name"); val cached = remote?.cached(name) ?: throw LocalUiFailure("请先离线保存")
+            if (input.optString("version") != cached.memo.version) throw LocalUiFailure("原记录版本已变化，请重新离线保存")
+            val spans = input.getJSONArray("destinations")
+            val mappings = cached.files.associate { it.attachment.name to (it.attachment.filename to "verified") }
+            ManagedAttachmentDestinations.rewrite(cached.memo.body, spans, mappings, remote.account()!!.getString("origin"))
             val imported = cached.files.map { it.file.inputStream().use { stream -> repository.importStream(stream, it.attachment.filename, it.attachment.mime) } }
-            var body = cached.memo.body
-            cached.files.forEachIndexed { index, original ->
-                val old = "/file/${original.attachment.name}/${android.net.Uri.encode(original.attachment.filename)}"
-                body = body.replace("${remote.account()?.optString("origin")}$old", "echo-attachment:${imported[index].id}").replace(old, "echo-attachment:${imported[index].id}")
+            imported.forEach { ref ->
+                write(File(root, "attachments/${ref.id}.json"), JSONObject().put("reference", gson.toJson(ref)).put("extra", JSONObject()).put("hidden", false))
             }
+            var body = ManagedAttachmentDestinations.rewrite(cached.memo.body, spans,
+                cached.files.mapIndexed { index, original -> original.attachment.name to (original.attachment.filename to "echo-attachment:${imported[index].id}") }.toMap(),
+                remote.account()!!.getString("origin"))
             body += "\n\n---\n[Memos 原记录](${remote.sourceUrl(name)})"
             NoteFormat.validate(body, imported)
             val publicBody = imported.fold(body) { content, ref -> content.replace("echo-attachment:${ref.id}", "/file/attachments/${ref.id}/${android.net.Uri.encode(ref.name)}") }

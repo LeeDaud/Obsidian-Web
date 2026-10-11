@@ -13,8 +13,17 @@ export function projectManagedImages(source: string, attachments: { name: string
 }
 
 function rewriteManagedDestinations(source: string, attachments: { name: string; filename: string; replacement: string }[], origin: string, allowSuffix: boolean): string {
+  const replacements = managedDestinationPlan(source, attachments, origin, allowSuffix);
+  for (const item of replacements.sort((a, b) => b.start - a.start)) {
+    const value = attachments.find((attachment) => attachment.name === item.name)!.replacement;
+    source = source.slice(0, item.start) + value + source.slice(item.end);
+  }
+  return source;
+}
+
+export function managedDestinationPlan(source: string, attachments: { name: string; filename: string }[], origin: string, allowSuffix = true): { start: number; end: number; name: string }[] {
   const events = postprocess(parse().document().write(preprocess()(source, undefined, true)));
-  const replacements: { start: number; end: number; value: string }[] = [];
+  const replacements: { start: number; end: number; name: string }[] = [];
   for (const [kind, token] of events) {
     if (kind !== "enter" || !["resourceDestinationString", "definitionDestinationString"].includes(token.type)) continue;
     const start = token.start.offset, end = token.end.offset;
@@ -29,8 +38,7 @@ function rewriteManagedDestinations(source: string, attachments: { name: string;
       if (!url.pathname.startsWith(path + "/")) return false;
       try { return decodeURIComponent(url.pathname.slice(path.length + 1)) === item.filename; } catch { return false; }
     });
-    if (attachment) replacements.push({ start, end, value: attachment.replacement });
+    if (attachment) replacements.push({ start, end, name: attachment.name });
   }
-  for (const item of replacements.sort((a, b) => b.start - a.start)) source = source.slice(0, item.start) + item.value + source.slice(item.end);
-  return source;
+  return replacements;
 }

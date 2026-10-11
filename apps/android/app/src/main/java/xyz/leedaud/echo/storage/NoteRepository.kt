@@ -86,6 +86,7 @@ class NoteRepository(val root: File, val database: EchoDatabase) {
         require(previous?.frozen != true) { "原笔记已入队，请创建关联续写" }
         require(previous == null || previous.revision == draft.baseRevision) { "原版本已变化，草稿保留，请重新打开" }
         if (previous != null && previous.body == draft.body && previous.todo == draft.todo
+            && previous.parentId == draft.parentId
             && previous.attachments == draft.attachments && previous.location == draft.location
             && previous.referenceIds.orEmpty() == draft.referenceIds.orEmpty() && previous.spaceName == draft.spaceName
             && previous.created == draft.created && (draft.updatedOverride == null || previous.updated == draft.updatedOverride)) return previous

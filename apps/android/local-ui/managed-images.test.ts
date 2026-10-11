@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { internalizeManagedImages, projectManagedImages } from "./src/managed-images";
+import { internalizeManagedImages, projectManagedImages, managedDestinationPlan } from "./src/managed-images";
 const file = { name: "attachments/abc-123", filename: "图 片.png" };
 const origin = "https://echo-app.local";
 const rewrite = (value: string) => internalizeManagedImages(value, [file], origin);
@@ -25,3 +25,9 @@ assert.equal(project(credentials), credentials);
 assert.equal(project('![alt /file/attachments/source_1](/file/attachments/source_1 "title /file/attachments/source_1")'), '![alt /file/attachments/source_1](/file/attachments/r-scoped "title /file/attachments/source_1")');
 assert.equal(project('![a](</file/attachments/source_1/图%20片.png>)'), '![a](</file/attachments/r-scoped>)');
 console.log("PASS historical image destinations (8 assertions)");
+const copiedSource = '😀 ![图](/file/attachments/abc-123?x=1)\n\n`/file/attachments/abc-123`';
+const copiedSpans = managedDestinationPlan(copiedSource, [file], origin);
+assert.equal(copiedSpans.length, 1);
+assert.equal(copiedSource.slice(copiedSpans[0].start, copiedSpans[0].end), "/file/attachments/abc-123?x=1");
+assert.equal(copiedSpans[0].name, file.name);
+console.log("PASS copied/imported destinations (3 assertions)");

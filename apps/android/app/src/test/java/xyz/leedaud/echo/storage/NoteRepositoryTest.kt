@@ -24,6 +24,15 @@ class NoteRepositoryTest {
         repository = NoteRepository(File(context.cacheDir, "native-test-${newId()}").apply { mkdirs() }, database)
     }
     @After fun close() { database.close() }
+    @Test fun parentOnlyChangeCreatesANewLocalRevision() {
+        val original = repository.save(Draft(id = "child", body = "unchanged", generation = 1), authorizeDelivery = false)!!
+        val updated = repository.save(Draft(id = original.id, body = original.body, parentId = "parent", created = original.created,
+            generation = 3, baseRevision = original.revision), authorizeDelivery = false)!!
+        assertEquals(original.revision + 1, updated.revision)
+        assertEquals("parent", updated.parentId)
+        assertEquals(original.body, updated.body)
+        assertTrue(repository.deliveries().isEmpty())
+    }
     @Test fun importedAttachmentsHaveStableShanghaiTimestampNamesAndPreserveBytes() {
         val time = java.time.Instant.parse("2026-10-11T01:02:03Z").toEpochMilli()
         val bytes = byteArrayOf(1, 2, 3, 4)

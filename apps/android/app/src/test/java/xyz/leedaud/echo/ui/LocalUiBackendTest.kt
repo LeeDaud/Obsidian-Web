@@ -231,6 +231,49 @@ class LocalUiBackendTest {
         assertEquals(original.replace(id, copied.attachments.single().id), copied.body)
         assertEquals("abc", repo.file(copied.attachments.single().file).readText())
         assertTrue(repo.deliveries().isEmpty())
+        val destination = "/file/attachments/$id?download=1#view"
+        val raw = "😀 ![图片]($destination \"标题\")\n\n`$destination`"
+        val uid = parsed.memos.single().getString("uid")
+        val path = parsed.memos.single().getString("contentPath")
+        val modified = parsed.copy(entries = parsed.entries + (path to raw.toByteArray()))
+        val spans = org.json.JSONArray().put(JSONObject().put("start", raw.indexOf(destination))
+            .put("end", raw.indexOf(destination) + destination.length).put("name", "attachments/$id"))
+        val parsedReport = importer.commit(modified, "DUPLICATE", mapOf(uid to spans))
+        assertEquals(1, parsedReport.getInt("created")); assertEquals(0, parsedReport.getInt("failed"))
+        val parsedCopy = repo.notes().first { it.id != note.id && it.id != copied.id }
+        assertEquals("😀 ![图片](echo-attachment:${parsedCopy.attachments.single().id} \"标题\")\n\n`$destination`", parsedCopy.body)
+        assertEquals("abc", repo.file(parsedCopy.attachments.single().file).readText())
+        assertTrue(repo.deliveries().isEmpty())
+    }
+    @Test fun stagedImportRequiresMatchingParsedSourceAndRetriesKeepOneReport() {
+        create("parsed archive protocol")
+        val exported = backend.request("local.export-archive", JSONObject()) as JSONObject
+        val bytes = backend.attachmentFile(exported.getString("name")).second.readBytes()
+        val start = backend.request("memos.api.v1.UserService/ImportMemos", JSONObject().put("spec", JSONObject().put("totalSize", bytes.size.toString()))) as JSONObject
+        val id = start.getString("uploadId")
+        backend.request("memos.api.v1.UserService/ImportMemos", JSONObject().put("uploadId", id).put("writeOffset", "0")
+            .put("data", java.util.Base64.getEncoder().encodeToString(bytes)).put("finishWrite", true).put("validateOnly", true))
+        val source = backend.request("local.import-source", JSONObject().put("uploadId", id).put("index", 0)) as JSONObject
+        val input = JSONObject().put("uploadId", id).put("uid", source.getString("uid")).put("sha256", "wrong").put("destinations", org.json.JSONArray())
+        assertThrows(LocalUiFailure::class.java) { backend.request("local.import-destinations", input) }
+        input.put("sha256", source.getString("sha256")); backend.request("local.import-destinations", input)
+        val finish = JSONObject().put("uploadId", id).put("writeOffset", bytes.size.toString()).put("finishWrite", true)
+            .put("parsedDestinations", true).put("conflictPolicy", "DUPLICATE")
+        val first = backend.request("memos.api.v1.UserService/ImportMemos", finish) as JSONObject
+        val retry = backend.request("memos.api.v1.UserService/ImportMemos", finish) as JSONObject
+        assertEquals(1, first.getJSONObject("report").getInt("created"))
+        assertEquals(first.getJSONObject("report").toString(), retry.getJSONObject("report").toString())
+        assertEquals(2, repo.notes().size); assertTrue(repo.deliveries().isEmpty())
+        val journal = File(root, "bridge/uploads/$id.json")
+        val interrupted = JSONObject(journal.readText())
+        assertEquals("DUPLICATE", interrupted.getJSONObject("importSession").getString("policy"))
+        interrupted.remove("report"); journal.writeText(interrupted.toString())
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val reopened = LocalUiBackend(context, repo, {}, File(root, "bridge"))
+        val recovered = reopened.request("memos.api.v1.UserService/ImportMemos", finish) as JSONObject
+        assertEquals(first.getJSONObject("report").toString(), recovered.getJSONObject("report").toString())
+        assertEquals(2, repo.notes().size)
+        assertThrows(LocalUiFailure::class.java) { reopened.request("memos.api.v1.UserService/ImportMemos", JSONObject(finish.toString()).put("conflictPolicy", "REPLACE")) }
     }
     @Test fun markdownExportPreservesNotesCreatedInTheSameSecond() {
         repo.save(Draft(body = "same second A", created = 1000), authorizeDelivery = false)

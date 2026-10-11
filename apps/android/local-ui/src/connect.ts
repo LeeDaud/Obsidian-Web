@@ -14,7 +14,7 @@ import { browserFetch } from "./platform";
 import { rewriteLocalFiles } from "./drafts";
 import { profileMemo } from "./profile";
 import { publicResource } from "./public-resources";
-import { internalizeManagedImages } from "./managed-images";
+import { internalizeManagedImages, managedDestinationPlan } from "./managed-images";
 const snapshots = new Map<string, any[]>();
 let queryWorker: Worker | undefined;
 const queries = new Map<string, { resolve: (names: string[]) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
@@ -78,6 +78,7 @@ export const localFetch: typeof fetch = async (input, init) => {
   let payload: unknown = {};
   const method = init?.method ?? (input instanceof Request ? input.method : "GET");
   const body = init?.body ?? (input instanceof Request ? await input.clone().text() : undefined);
+  const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
   if ((url.protocol === "blob:" || /^\/(assets|file\/(?:attachments|picked))\//.test(url.pathname)) && method === "GET") return browserFetch(input, init);
   if (/^\/memos\.api\.v1\.[A-Za-z]+Service\/[A-Za-z]+$/.test(url.pathname)) {
     if (method !== "POST" || body == null) throw new Error("请求格式不支持");
@@ -103,7 +104,21 @@ export const localFetch: typeof fetch = async (input, init) => {
       const tagCount: Record<string, number> = {};
       for (const memo of records) for (const tag of memo.tags ?? []) tagCount[tag] = (tagCount[tag] ?? 0) + 1;
       result = { name: "users/device", memoCount: records.length, memoDisplayTimestamps: records.map((memo) => memo.createTime), tagCount };
-    } else result = await nativeCall(command, payload);
+    } else {
+      if (command === "memos.api.v1.UserService/ImportMemos" && (payload as any).finishWrite && !(payload as any).validateOnly) {
+        for (let index = 0; index <= 1000; index++) {
+          signal?.throwIfAborted();
+          const source = await nativeCall("local.import-source", { uploadId: (payload as any).uploadId, index });
+          if (source.done) break;
+          signal?.throwIfAborted();
+          await nativeCall("local.import-destinations", { uploadId: (payload as any).uploadId, uid: source.uid, sha256: source.sha256,
+            destinations: managedDestinationPlan(source.content, source.attachments, source.origin) });
+        }
+        (payload as any).parsedDestinations = true;
+      }
+      signal?.throwIfAborted();
+      result = await nativeCall(command, payload);
+    }
     if (result?.name?.startsWith("memos/")) result = profileMemo(result);
     registerMetadata(result); stripRevision(result);
     if (/(Create|Update|Delete)Memo$/.test(command) || command === "echo.submit") snapshots.clear();
