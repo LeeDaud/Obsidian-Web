@@ -419,3 +419,12 @@ CI/CD、生产部署、HTTPS、服务器系统服务均未新增或启用。Obsi
 - 本轮 ss-review：新增登录表单及账号控件为 Pass（局部审查），采用既有 Memos 语义主题与 Lucide 资源，输入有标签、密码隐藏、44dp 操作区、选中 Tab 语义、附件名称省略并独立图标操作、详情操作垂直排列防小屏溢出，图片延迟降采样。React/Tailwind 项不适用，原 Web 风格优先。完整登录后详情、430px/大字号/当前 API 与真机视觉仍未闭环，不将局部 Pass 扩大为整个 App 与 Web 一模一样。
 - APK：`apps/android/app/build/outputs/apk/debug/app-debug.apk`，0.3.0 / versionCode 3；SHA-256 `1308145172d5e375ddd3cb5a5f054cfc406618b06d460610879539ab521dabf4`。apksigner verify 成功，沿用既有 Android Debug 证书，SHA-256 `58e970ab2519ab99db7fd717fb70d0eba1215c7e834d932860b0d452e7eee174`。同签名覆盖安装，不建议卸载。
 - 限制：仅用户名/密码；SSO 未适配。外链附件不下载，超限/归属不明不会标记完整离线。离线缓存并非全库加密；断开隐藏但不删除。远端内嵌图片链接在原 Markdown 中保留，复制附件不代表内嵌引用已完整重写。此前已被清理或仅在 GitHub/电脑的历史不会自动恢复。完整原 Web 渲染 R1–R4 仍待单独确认；真实账号由用户在 App 内登录验收。
+# Android 附件细节调整（2026-10-11）
+
+- 用户确认 plan 的附件方案，GitLab 仅可行性讨论，未新增投递服务或迁移队列。
+- 新持久附件显示名为上海时区 `yyyyMMdd-HHmmss.ext`，同秒同扩展名追加 `-02` 等；私有副本也使用该名称，通过现有 file 字段引用，UUID资源ID与Room schema不变。碰撞检查包含已完成文件和未完成part文件，失败文件不自动删除。旧附件/Markdown/队列快照不修改，仓库路径仍沿用原生成规则（同秒后缀按笔记附件集合计算，不保证与跨笔记本机后缀完全一致）。
+- 新原组件待选文件在未持久保存前仍显示源文件名；完成上传到设备私有存储后显示新名称，此“上传”不代表投递GitHub。
+- Compose与本地原组件候选使用三个点菜单；Compose保留插入/移除/分享及音频播放停止，候选保留插入/排序/移除并连接原生分享。未修改上游生产页面。
+- `testDebugUnitTest lintDebug assembleDebug`通过：75项测试无失败，Lint 0 errors /17 warnings；新增上海时区、同秒避重、重开、字节、旧附件及安全扩展名测试。TypeScript类型检查通过。
+- `node node_modules/tsx/dist/cli.mjs apps/android/local-ui/verify.ts`通过：合成原组件页面320/390/430宽度、附件菜单展开/关闭/移除、禁用排序及菜单可见分享，无溢出/pageerror。截图在忽略的build/android-qa/local-ui/attachment-menu-*.png；现有暂存/保存/故障恢复检查仍通过。菜单事件沿用当前Base UI的onClick，不使用不会触发动作的onSelect。
+- ss-review：Pass（本轮新增范围代码及候选截图）。复用原语义颜色、菜单和Lucide图标；三个点触摸区44，文件名省略防溢出、按钮有名称，菜单支持Escape关闭。Compose与真实分享/音频尚未设备实测，不宣称完整硬件验收。没有提交/推送/公开发布，已发布preview3不含本轮修改。

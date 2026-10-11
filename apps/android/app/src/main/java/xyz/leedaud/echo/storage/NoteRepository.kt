@@ -165,7 +165,14 @@ class NoteRepository(val root: File, val database: EchoDatabase) {
         val id = newId()
         val extension = name.substringAfterLast('.', "").lowercase().takeIf { Regex("[a-z0-9]{1,10}").matches(it) }
             ?: when (mime) { "image/jpeg" -> "jpg"; "image/png" -> "png"; "audio/mp4" -> "m4a"; else -> "bin" }
-        val relative = "attachments/$id.$extension"
+        val stamp = timestamp(created)
+        var displayName = "$stamp.$extension"
+        var sequence = 1
+        while (file("attachments/$displayName").exists() || file("attachments/$displayName.part").exists()) {
+            sequence++
+            displayName = "$stamp-${sequence.toString().padStart(2, '0')}.$extension"
+        }
+        val relative = "attachments/$displayName"
         val temporary = file("$relative.part")
         temporary.parentFile!!.mkdirs()
         var total = 0L
@@ -181,7 +188,7 @@ class NoteRepository(val root: File, val database: EchoDatabase) {
             output.fd.sync()
         } }
         check(temporary.renameTo(file(relative))) { "附件保存失败" }
-        return AttachmentRef(id, relative, name, mime, total, digest(file(relative).readBytes()), created, extension)
+        return AttachmentRef(id, relative, displayName, mime, total, digest(file(relative).readBytes()), created, extension)
     }
     fun importUri(context: Context, uri: Uri): AttachmentRef {
         require(uri.scheme == "content") { "只接受系统选择的附件" }

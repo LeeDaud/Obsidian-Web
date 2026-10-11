@@ -466,6 +466,7 @@ internal fun deliveryLabel(job: Delivery?): String = when {
     var player by remember { mutableStateOf<MediaPlayer?>(null) }
     DisposableEffect(Unit) { onDispose { player?.release() } }
     items.forEach { attachment ->
+        var menu by remember(attachment.id) { mutableStateOf(false) }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             if (attachment.mime.startsWith("image/")) {
                 val bitmap by produceState<Bitmap?>(null, attachment.id) {
@@ -486,26 +487,32 @@ internal fun deliveryLabel(job: Delivery?): String = when {
                         }.onFailure { notify("没有可用的图片查看应用，可通过分享或附件导出查看") }
                     }, contentScale = ContentScale.Fit) }
             }
-            Row(Modifier.horizontalScroll(rememberScrollState())) {
-                Text(attachment.name.take(32), Modifier.padding(top = 12.dp))
-                if (insert != null) TextButton(onClick = { insert(attachment) }) { Text("插入正文") }
-                if (remove != null) TextButton(onClick = { remove(attachment) }) { Text("移除") }
-                if (attachment.mime.startsWith("audio/")) TextButton(onClick = {
-                    try {
-                        player?.release()
-                        player = MediaPlayer().apply {
-                            setDataSource(model.privateFile(attachment.file).absolutePath)
-                            setOnPreparedListener { it.start() }; prepareAsync()
-                        }
-                    } catch (_: Exception) { notify("音频无法播放") }
-                }) { Text("播放") }
-                if (attachment.mime.startsWith("audio/") && player != null) TextButton(onClick = { runCatching { player?.stop() }; player?.release(); player = null }) { Text("停止") }
-                TextButton(onClick = {
-                    try {
-                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", model.privateFile(attachment.file))
-                        context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = attachment.mime; putExtra(Intent.EXTRA_STREAM, uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }, "分享附件"))
-                    } catch (_: Exception) { notify("暂时无法打开系统分享") }
-                }) { Text("分享") }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(attachment.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Box {
+                    MemosIconButton("ellipsis-vertical", "附件操作：${attachment.name}", Modifier.testTag("attachment-menu-${attachment.id}"), onClick = { menu = true })
+                    DropdownMenu(menu, { menu = false }, containerColor = LocalMemosPalette.current.popover) {
+                        fun action(block: () -> Unit) { menu = false; block() }
+                        if (insert != null) MemosMenuItem("插入正文", "image") { action { insert(attachment) } }
+                        if (remove != null) MemosMenuItem("移除", "x") { action { remove(attachment) } }
+                        if (attachment.mime.startsWith("audio/")) MemosMenuItem("播放", "mic") { action {
+                            try {
+                                player?.release()
+                                player = MediaPlayer().apply {
+                                    setDataSource(model.privateFile(attachment.file).absolutePath)
+                                    setOnPreparedListener { it.start() }; prepareAsync()
+                                }
+                            } catch (_: Exception) { notify("音频无法播放") }
+                        } }
+                        if (attachment.mime.startsWith("audio/") && player != null) MemosMenuItem("停止", "x") { action { runCatching { player?.stop() }; player?.release(); player = null } }
+                        MemosMenuItem("分享", "share-2") { action {
+                            try {
+                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", model.privateFile(attachment.file))
+                                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = attachment.mime; putExtra(Intent.EXTRA_STREAM, uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }, "分享附件"))
+                            } catch (_: Exception) { notify("暂时无法打开系统分享") }
+                        } }
+                    }
+                }
             }
         }
     }

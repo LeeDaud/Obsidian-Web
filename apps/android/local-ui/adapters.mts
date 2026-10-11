@@ -15,6 +15,14 @@ export function nativeAdapters() {
     },
     transform(code: string, id: string) {
       const file = id.replaceAll("\\", "/").split('?')[0];
+      if (file.endsWith("/MemoMetadata/Attachment/AttachmentListEditor.tsx")) {
+        const start = code.indexOf("const AttachmentItemActions:");
+        const end = code.indexOf("const AttachmentItemCard:", start);
+        if (start < 0 || end < 0) throw new Error("Original attachment action adapter anchor changed");
+        code = code.slice(0, start) + "const AttachmentItemActions = AttachmentActions;\n\n" + code.slice(end);
+        code = `import { AttachmentActions } from '${source}/AttachmentActions';\n${code}`;
+        code = inject(code, "      <AttachmentItemActions", "      <AttachmentItemActions sourceUrl={sourceUrl} filename={filename}");
+      }
       if (file.endsWith("/components/MemoEditor/index.tsx")) {
         code = inject(code, "ref={editorContainerRef}", "ref={editorContainerRef} data-echo-editor-key={editorCacheKey}");
         code = inject(code, "const handleDraft = useCallback(() => {", "const handleDraft = useCallback(async () => {");

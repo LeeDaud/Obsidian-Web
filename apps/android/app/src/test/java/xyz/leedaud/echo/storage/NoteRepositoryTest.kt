@@ -24,6 +24,31 @@ class NoteRepositoryTest {
         repository = NoteRepository(File(context.cacheDir, "native-test-${newId()}").apply { mkdirs() }, database)
     }
     @After fun close() { database.close() }
+    @Test fun importedAttachmentsHaveStableShanghaiTimestampNamesAndPreserveBytes() {
+        val time = java.time.Instant.parse("2026-10-11T01:02:03Z").toEpochMilli()
+        val bytes = byteArrayOf(1, 2, 3, 4)
+        val first = repository.importStream(ByteArrayInputStream(bytes), "手机图片.PNG", "image/png", time)
+        val second = repository.importStream(ByteArrayInputStream(bytes), "other.png", "image/png", time)
+        assertEquals("20261011-090203.png", first.name)
+        assertEquals("20261011-090203-02.png", second.name)
+        val reopened = NoteRepository(repository.root, database)
+        val third = reopened.importStream(ByteArrayInputStream(bytes), "../../unsafe.png", "image/png", time)
+        assertEquals("20261011-090203-03.png", third.name)
+        assertArrayEquals(bytes, repository.file(first.file).readBytes())
+        val note = repository.save(Draft(body = "图片", attachments = listOf(first), generation = 1))!!
+        assertEquals(first, reopened.notes().single().attachments.single())
+        assertEquals(first.name, NoteFormat.attachmentPaths(note.attachments, "note").getValue(first.id).substringAfterLast('/'))
+        assertEquals(0, repository.deliveries().size)
+    }
+    @Test fun unsafeExtensionFallsBackWithoutRenamingExistingAttachments() {
+        val existing = AttachmentRef("old", "attachments/old.png", "旧图片.png", "image/png", 1, digest(byteArrayOf(7)), 1, "png")
+        repository.file(existing.file).apply { parentFile!!.mkdirs(); writeBytes(byteArrayOf(7)) }
+        repository.saveDraft(Draft(id = "old-draft", attachments = listOf(existing), generation = 1))
+        val imported = repository.importStream(ByteArrayInputStream(byteArrayOf(8)), "invalid.???", "image/jpeg", 0)
+        assertEquals("19700101-080000.jpg", imported.name)
+        assertEquals(existing, repository.drafts().single().attachments.single())
+        assertArrayEquals(byteArrayOf(7), repository.file(existing.file).readBytes())
+    }
     @Test fun firstLaunchAndLocalSaveNeedNoTargetOrNetwork() {
         val draft = repository.activeDraft().copy(body = "离线中文", generation = 1)
         repository.saveDraft(draft)

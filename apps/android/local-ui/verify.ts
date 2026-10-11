@@ -108,6 +108,21 @@ try {
   await page.evaluate(() => { (window as any).__failLocalDraft = false; });
   await page.getByRole("button", { name: "暂存到当前设备", exact: true }).click();
   await page.getByText("已暂存到当前设备", { exact: true }).waitFor();
+  await page.locator('input[type="file"][accept=""]').setInputFiles("upstream/memos/web/public/logo.webp");
+  const attachmentMenu = page.getByRole("button", { name: "附件操作", exact: true });
+  await attachmentMenu.waitFor();
+  for (const width of [320, 390, 430]) {
+    await page.setViewportSize({ width, height: 844 });
+    await attachmentMenu.click();
+    await page.getByRole("menuitem", { name: "分享", exact: true }).waitFor();
+    await page.getByRole("menuitem", { name: "移除", exact: true }).waitFor();
+    if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error("Attachment menu overflow");
+    await page.screenshot({ path: `${out}/attachment-menu-${width}.png`, fullPage: true });
+    await page.keyboard.press("Escape");
+  }
+  await attachmentMenu.click();
+  await page.getByRole("menuitem", { name: "移除", exact: true }).click();
+  await attachmentMenu.waitFor({ state: "detached" });
   if (errors.length) throw new Error(`Page errors: ${errors.join(", ")}`);
   await writeFile(`${out}/browser-verification.json`, JSON.stringify({ measurements, errors, blocked, commands }, null, 2));
   console.log(JSON.stringify({ result: "passed", measurements, errors, blocked: blocked.length, commands }));
