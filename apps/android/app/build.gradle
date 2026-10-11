@@ -4,9 +4,27 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.compose'
 }
 
+def releaseSigningNames = ['ECHO_RELEASE_STORE_FILE', 'ECHO_RELEASE_STORE_PASSWORD', 'ECHO_RELEASE_KEY_ALIAS', 'ECHO_RELEASE_KEY_PASSWORD']
+def releaseSigningValues = releaseSigningNames.collectEntries { name -> [(name): System.getenv(name)] }
+def releaseSigningReady = releaseSigningValues.values().every { it != null && !it.isEmpty() }
+tasks.register('verifyReleaseSigning') {
+    doLast {
+        if (!releaseSigningReady) throw new GradleException('Release signing is missing. Use apps/android/release-signing.ps1; never publish an unsigned or debug APK.')
+        def key = file(releaseSigningValues.ECHO_RELEASE_STORE_FILE).canonicalFile
+        def sourceRoot = rootProject.projectDir.parentFile.parentFile.canonicalFile
+        if (!key.isFile() || key.toPath().startsWith(sourceRoot.toPath()) || key.name == 'debug.keystore') {
+            throw new GradleException('Release signing must use an existing, independent keystore outside the source repository.')
+        }
+    }
+}
+tasks.configureEach { task ->
+    if (task.name in ['packageRelease', 'packageReleaseBundle', 'signReleaseBundle', 'assembleRelease', 'bundleRelease']) task.dependsOn 'verifyReleaseSigning'
+}
+
 tasks.register('buildLocalUi', Exec) {
     workingDir rootProject.projectDir.parentFile.parentFile
     commandLine 'node', 'upstream/memos/web/node_modules/vite/bin/vite.js', 'build', '--config', 'apps/android/local-ui/vite.config.mts'
+    releaseSigningNames.each { name -> environment name, '' }
     inputs.dir '../local-ui'
     inputs.dir '../../../upstream/memos/web/src'
     inputs.file '../../../upstream/memos/web/pnpm-lock.yaml'
@@ -39,8 +57,8 @@ android {
         applicationId 'xyz.leedaud.echo'
         minSdk 26
         targetSdk 36
-        versionCode 7
-        versionName '0.4.0-preview3'
+        versionCode 8
+        versionName '1.0'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         javaCompileOptions { annotationProcessorOptions { arguments = ['room.schemaLocation': "$projectDir/schemas"] } }
     }
@@ -48,8 +66,19 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
+    signingConfigs {
+        if (releaseSigningReady) {
+            release {
+                storeFile file(releaseSigningValues.ECHO_RELEASE_STORE_FILE)
+                storeType 'PKCS12'
+                storePassword releaseSigningValues.ECHO_RELEASE_STORE_PASSWORD
+                keyAlias releaseSigningValues.ECHO_RELEASE_KEY_ALIAS
+                keyPassword releaseSigningValues.ECHO_RELEASE_KEY_PASSWORD
+            }
+        }
+    }
     buildTypes {
-        debug { debuggable true; buildConfigField 'boolean', 'LOCAL_UI_DEFAULT', 'false' }
+        debug { debuggable true; buildConfigField 'boolean', 'LOCAL_UI_DEFAULT', 'true' }
         qa {
             initWith debug
             applicationIdSuffix '.qa'
@@ -58,7 +87,12 @@ android {
             matchingFallbacks = ['debug']
             buildConfigField 'boolean', 'LOCAL_UI_DEFAULT', 'false'
         }
-        release { minifyEnabled false; buildConfigField 'boolean', 'LOCAL_UI_DEFAULT', 'false' }
+        release {
+            debuggable false
+            minifyEnabled false
+            buildConfigField 'boolean', 'LOCAL_UI_DEFAULT', 'true'
+            if (releaseSigningReady) signingConfig signingConfigs.release
+        }
     }
     testBuildType 'qa'
     lint { abortOnError true }

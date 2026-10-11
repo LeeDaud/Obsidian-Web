@@ -4,6 +4,8 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.semantics.SemanticsProperties
 import org.junit.Rule
+import org.junit.Before
+import org.junit.After
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -21,6 +23,34 @@ import xyz.leedaud.echo.notes.*
 @LooperMode(LooperMode.Mode.PAUSED)
 class NativeLocalUiTest {
     @get:Rule val app = createAndroidComposeRule<NativeActivity>()
+    @Before fun isolateRobolectricDatabaseHandle() {
+        // Robolectric resets SQLite handles between cases, unlike a running app process.
+        xyz.leedaud.echo.storage.NoteRepository::class.java.getDeclaredField("instance").apply { isAccessible = true }.set(null, null)
+    }
+    @After fun closeRobolectricDatabaseBeforeHandleReset() {
+        app.activityRule.scenario.close()
+        val field = xyz.leedaud.echo.storage.NoteRepository::class.java.getDeclaredField("instance").apply { isAccessible = true }
+        (field.get(null) as? xyz.leedaud.echo.storage.NoteRepository)?.database?.close()
+        field.set(null, null)
+    }
+    @Test fun unsupportedWebViewFallbackOpensNativeHomeAndSurvivesRecreate() {
+        org.junit.Assert.assertTrue(xyz.leedaud.echo.BuildConfig.LOCAL_UI_DEFAULT)
+        val content = app.activity.findViewById<android.view.ViewGroup>(android.R.id.content)
+        val panel = content.getChildAt(0) as android.widget.LinearLayout
+        val button = panel.getChildAt(1) as android.widget.Button
+        org.junit.Assert.assertEquals("返回本机界面", button.text.toString())
+        app.activity.runOnUiThread { button.performClick() }
+        app.waitForIdle()
+        try { app.waitUntil(15000) { app.onAllNodesWithTag("note-editor").fetchSemanticsNodes().isNotEmpty() } }
+        catch (error: Throwable) {
+            val state = androidx.lifecycle.ViewModelProvider(app.activity)[NoteViewModel::class.java].state.value
+            throw AssertionError("Fallback ready=${state.ready}, busy=${state.busy}, error=${state.message}, root=${content.getChildAt(0).javaClass.name}", error)
+        }
+        app.activityRule.scenario.recreate()
+        app.waitForIdle()
+        app.waitUntil(15000) { app.onAllNodesWithTag("note-editor").fetchSemanticsNodes().isNotEmpty() }
+        app.onNodeWithTag("note-editor").assertExists()
+    }
     @Test fun editingChildDoesNotReplacePinnedParentCard() {
         val model = androidx.lifecycle.ViewModelProvider(app.activity)[NoteViewModel::class.java]
         // This fixture checks card placement only; it does not read or mutate repository records.

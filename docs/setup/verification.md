@@ -1,5 +1,23 @@
 # 原版集成验收记录
 
+## 2026-10-11 1.0 版本、默认界面与签名候选验收
+
+- 用户明确授权版本号精确1.0、默认本地原Web组件和验收，CLAUDE/AGENTS同步当前授权，覆盖旧默认开关门槛。versionCode=8；debug/release LOCAL_UI_DEFAULT=true、QA旧Compose默认false。原生设置仍独立；低WebView回退直接打开原生首页并保存本次回退到重建状态，修复默认true时旧recreate返回循环。
+- 新回退/重建Robolectric回归保留原断言；定向通过但完整套件发现跨测试SQLite旧句柄及Room失效追踪协程污染。测试夹具在每例前隔离应用单例、每例结束关闭Activity/Room，不修改生产数据库逻辑、不隐藏异常。最终debug/release各92项测试，0失败/错误；debug Lint 0错误/17警告，release 0错误/16警告。debug完整回归1m28s、正式签名脚本完整回归/构建1m15s成功。
+- 使用用户已有正式PKCS12与本机DPAPI口令构建，没有输出口令或旋转密钥。APK apksigner v2核验通过，RSA3072；证书SHA256为45378e4549cad3bda81e532a576e29ffac4515894d3e58a23bd989ba718b6490，与项目外公开certificate.cer一致。aapt实际包内版本1.0/8，未标记debuggable，release BuildConfig DEFAULT=true；345项APK本地UI资产与当前构建清单逐项SHA256一致。
+- 正式候选文件：apps/android/app/build/outputs/apk/release/app-release.apk，SHA256=7156c55870f013bf2d94fd3041a45ef3d1854796dd91b50ed92febbc85cfb3f2。源码当前尚有未提交改动，不能说该包等同已推送7576f43的发布物。脚本成功提示改为版本/界面取自build.gradle，避免默认已开启却提示“未启用新UI”的歧义。
+- 仅启动既有项目隔离echo-web-ui-qa，覆盖安装调试1.0保留合成数据。默认生命周期脚本移除preview extra，实际API35/WebView124共11组：暂存不生成笔记、3次冷启动恢复、离线启动、系统选择器取消、麦克风/位置拒绝、保存后不复活、导出取消、大消息重组、浅深色五页、IME/inset，startupRetries=0、pageerror=0。dumpsys安装版本1.0/8；补原编辑器保存/任务/双击编辑/格式/Range，以及实际系统图片选择/正文插入/保存重开/单图去重/37,158字节和画廊通过。
+- 浏览器verify.ts 320/390/430布局、历史图、暂存保存故障、菜单、复制/ZIP及取消通过；TS检查、17项目的地址断言通过。ss-review：本轮入口/inset和回退改动范围Pass，原CSS/控件保留，浏览器与设备无溢出；完整设备截图含系统状态栏/导航，编辑器和菜单不重叠。没有将这一部分当作所有页面逐像素一致。
+- 截图/结果保存在忽略的build/android-qa/local-ui，完整设备图default-1.0-device.png。正式非调试APK未在设备安装，模拟器用调试变体实测；真实中文IME/硬件录音/账号/仓库与电脑端、最低WebView111、签名跨调试升级及备份仍未验收。C2c/C3/C4缺口仍在，尤其iframe/媒体分组保真未补齐。不自动卸载/清数据，不发布或提交推送，CI/CD未触发。
+
+## 2026-10-11 正式签名接入准备（未生成密钥）
+
+- 用户确认项目外目录/本机密码交互/独立备份方案。build.gradle新增四个ECHO_RELEASE签名环境变量、PKCS12 release配置及verifyReleaseSigning依赖；缺配置/源仓库内密钥/debug.keystore拒绝打包。Node资产构建清空签名变量，release显式非调试；默认界面、应用ID/版本、CI/CD不变。该Gradle运行防护尚未实测，不以源码检查冒充通过。
+- 新release-signing.ps1在本机掩码窗口输入密码，拒绝已有/非空签名目录及链接路径，生成新RSA3072 PKCS12和公开证书，密码以当前Windows用户DPAPI保存；不打印密码、不上传或覆盖密钥，失败文件保留。Build通过进程环境接入、finally恢复并禁用daemon/配置/构建缓存；不发布、不安装、不迁移。独立备份需用户实际完成，复选框承诺不算备份已验收。
+- PowerShell解析器语法检查通过；未显示窗口的密码掩码控件和合成SYSTEM SID权限构造检查通过。未运行实际keytool/DPAPI生成或正式签名，不计为密钥已创建。没有读取私人凭据。
+- 项目外身份/交互能力检查的require_escalated命令被审批服务额度限制阻止，操作没有执行；这是审核服务失败，不是判定操作不安全。未绕过审批。无凭据verifyReleaseSigning尝试在Gradle wrapper的现有缓存锁权限处失败，未运行到Gradle防护；91项既有测试结果保留，未重新执行构建或宣称签名验证通过。
+- 本轮改动未提交推送，无正式APK发布或默认切换；后续需恢复审批、在本机完成密码窗口与独立备份、验收签名构建和迁移方案。现有调试版保留，不卸载或清数据。
+
 ## 2026-10-11 C2b 时间与本机关系保真
 
 - 用户继续优化，沿用已确认C2。导入使用已有Draft.updatedOverride和AttachmentRef.created，保留原时间点（现有毫秒精度）与档案源显示文件名；缺失更新时间/附件时间回退笔记创建时间。新手机选择仍时间戳命名，旧笔记/队列/源文件不重命名，Room schema不变。

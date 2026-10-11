@@ -14,7 +14,7 @@ const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
 async function start() {
   await device!.shell(`am force-stop ${pkg}`);
   for (let i = 0; i < 100 && device!.webViews().some((view) => view.pkg() === pkg); i++) await pause(100);
-  await device!.shell(`am start -n ${pkg}/.NativeActivity --ez local-ui-preview true`);
+    await device!.shell(`am start -n ${pkg}/.NativeActivity`);
   for (let attempt = 0; attempt < 4; attempt++) {
     const view = await device!.webView({ pkg }, { timeout: 30000 });
     try {

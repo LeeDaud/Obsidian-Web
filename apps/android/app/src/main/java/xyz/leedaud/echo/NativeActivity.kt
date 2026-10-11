@@ -21,17 +21,22 @@ class NativeActivity : ComponentActivity() {
     private var localWeb: LocalWebView? = null
     private var platform: LocalUiPlatform? = null
     private var webMode = false
+    private var nativeFallback = false
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        nativeFallback = savedInstanceState?.getBoolean("native-fallback", false) == true
         webMode = (BuildConfig.LOCAL_UI_DEFAULT || (BuildConfig.DEBUG && intent.getBooleanExtra("local-ui-preview", false)))
-            && !intent.getBooleanExtra("native-settings", false) && !(BuildConfig.DEBUG && intent.getBooleanExtra("native-legacy-ui", false))
+            && !nativeFallback && !intent.getBooleanExtra("native-settings", false) && !(BuildConfig.DEBUG && intent.getBooleanExtra("native-legacy-ui", false))
         if (webMode) {
             val version = runCatching { android.webkit.WebView.getCurrentWebViewPackage()?.versionName?.substringBefore('.')?.toIntOrNull() }.getOrNull()
             if (version == null || version < 111) {
                 val panel = android.widget.LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL; setPadding(24, 80, 24, 24) }
                 panel.addView(android.widget.TextView(this).apply { textSize = 16f; text = "本地原组件需要可用的 Android System WebView（Chromium 111 或以上）。当前设备未满足，未加载页面；本机记录保留。" })
-                panel.addView(android.widget.Button(this).apply { text = "返回本机界面"; setOnClickListener { intent.removeExtra("local-ui-preview"); recreate() } })
+                panel.addView(android.widget.Button(this).apply { text = "返回本机界面"; setOnClickListener {
+                    nativeFallback = true; webMode = false
+                    setContent { EchoApp(model, memos) }
+                } })
                 setContentView(panel)
                 return
             }
@@ -62,6 +67,10 @@ class NativeActivity : ComponentActivity() {
         } else setContent { EchoApp(model, memos, if (intent.getBooleanExtra("native-settings", false)) "设置" else "首页") }
     }
     override fun onStop() { if (!webMode) model.stash(); super.onStop() }
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("native-fallback", nativeFallback)
+        super.onSaveInstanceState(outState)
+    }
     override fun onResume() {
         super.onResume()
         if (!webMode) model.refreshStatuses()
