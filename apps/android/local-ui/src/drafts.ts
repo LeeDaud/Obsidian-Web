@@ -10,6 +10,21 @@ const uploaded = new WeakMap<File, Promise<any>>();
 const urls = new Map<string, string>();
 export function rewriteLocalFiles(content: string): string { for (const [before, after] of urls) content = content.replaceAll(before, after); return content; }
 const sequence = new Map<string, number>();
+const pendingWrites = new Set<Promise<void>>();
+const failedDrafts = new Map<string, { state: EditorState; baseRevision?: string }>();
+const draftFlushers = new Map<string, () => Promise<void>>();
+export function registerDraftFlusher(key: string, flush: () => Promise<void>) {
+  draftFlushers.set(key, flush);
+  return () => { if (draftFlushers.get(key) === flush) draftFlushers.delete(key); };
+}
+/** A system update must not interrupt attachment staging or an unconfirmed device draft. */
+export async function flushDraftsBeforeUpdate(): Promise<void> {
+  await Promise.all([...draftFlushers.values()].map((flush) => flush()));
+  while (pendingWrites.size) await Promise.allSettled([...pendingWrites]);
+  await Promise.all([...failedDrafts.entries()].map(([key, snapshot]) => persistEditorDraft(key, snapshot.state, snapshot.baseRevision)));
+  while (pendingWrites.size) await Promise.allSettled([...pendingWrites]);
+  if (failedDrafts.size) throw new Error("设备暂存未完成，请返回编辑器暂存后再更新");
+}
 export function encodeBytes(bytes: Uint8Array): string {
   const parts = [];
   for (let offset = 0; offset < bytes.length; offset += 32768) parts.push(String.fromCharCode(...bytes.subarray(offset, offset + 32768)));
@@ -37,7 +52,18 @@ export function uploadLocalFile(local: LocalFile): Promise<any> {
   }
   return pending;
 }
-export async function persistEditorDraft(key: string, state: EditorState, baseRevision?: string): Promise<void> {
+export function persistEditorDraft(key: string, state: EditorState, baseRevision?: string): Promise<void> {
+  const write = writeEditorDraft(key, state, baseRevision);
+  const generation = sequence.get(key);
+  pendingWrites.add(write);
+  write.then(() => {
+    if (sequence.get(key) === generation) failedDrafts.delete(key);
+  }, () => {
+    if (sequence.get(key) === generation) failedDrafts.set(key, { state, baseRevision });
+  }).finally(() => pendingWrites.delete(write));
+  return write;
+}
+async function writeEditorDraft(key: string, state: EditorState, baseRevision?: string): Promise<void> {
   const changeToken = editorChangeToken(key);
   const generation = (sequence.get(key) ?? 0) + 1; sequence.set(key, generation);
   if (state.localFiles.reduce((size, file) => size + file.file.size, 0) + state.metadata.attachments.reduce((size, file) => size + Number(file.size), 0) > 25 * 1024 * 1024) throw new Error("附件总量不能超过 25 MiB");
@@ -57,6 +83,7 @@ export async function persistEditorDraft(key: string, state: EditorState, baseRe
   window.dispatchEvent(new Event("echo-draft-saved"));
 }
 export function clearEditorDraft(key: string) {
+  failedDrafts.delete(key);
   sequence.set(key, (sequence.get(key) ?? 0) + 1); localStorage.removeItem(key);
   return nativeCall("local.clear-draft", { key });
 }

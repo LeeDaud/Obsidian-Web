@@ -54,6 +54,8 @@ export default defineConfig({
       { find: /^react\//, replacement: `${upstream}/node_modules/react/` },
       { find: /^lucide-react$/, replacement: resolve(upstream, "node_modules/lucide-react") },
       { find: /^react-hot-toast$/, replacement: resolve(upstream, "node_modules/react-hot-toast/dist/index.mjs") },
+      // Keep the runtime entry separate from the local tsconfig's declaration-only paths.
+      { find: /^react-router-dom$/, replacement: resolve(upstream, "node_modules/react-router-dom/dist/index.mjs") },
       { find: /^@tanstack\/react-query$/, replacement: resolve(upstream, "node_modules/@tanstack/react-query") },
       { find: /^@\/connect$/, replacement: resolve(local, "connect.ts") },
       { find: /^@\/auth-state$/, replacement: resolve(local, "auth-state.ts") },

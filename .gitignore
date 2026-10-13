@@ -13,6 +13,7 @@ __pycache__/
 
 # Android: generated files, local machine configuration and private signing keys
 apps/android/.gradle/
+apps/android/.kotlin/
 apps/android/**/build/
 apps/android/local.properties
 apps/android/*.jks

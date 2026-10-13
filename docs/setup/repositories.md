@@ -10,7 +10,7 @@
 - 经用户明确授权，初始化提交 bcd2213 已推送，main 跟踪 origin/main。
 - 提交只有 README.md、.gitignore；忽略 .obsidian/、.trash/，不含测试笔记或真实笔记。
 
-不需要再次创建或初始化这个仓库。网页代码仍位于 D:\AAA-Project\037-Obsidian-Web。
+不需要再次创建或初始化这个仓库。当前应用代码位于 D:\AAA-Project\007-Obsidian-Web（2026-10-13 已更新目录编号）。
 
 ## Obsidian Git 自动接收
 

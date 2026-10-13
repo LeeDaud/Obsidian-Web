@@ -140,12 +140,16 @@ class LocalWebView(private val activity: Activity, private val backend: LocalUiB
                 }.getOrElse { denied() }
             }
             override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                platform.cancelUpdatePreparation()
                 platform.cancelSelection()
                 generation++; channel?.close(); channel = null
             }
             override fun onPageFinished(view: WebView, url: String) {
                 if (!trustedDocument(Uri.parse(url)) || channel != null) return
                 val epoch = generation
+                platform.requestUpdateDrafts = { nonce ->
+                    if (epoch == generation) evaluateJavascript("window.__echoConfirmUpdateDrafts?.(${JSONObject.quote(nonce)})", null)
+                }
                 val ports = createWebMessageChannel()
                 channel = ports[0]
                 ports[0].setWebMessageCallback(object : WebMessagePort.WebMessageCallback() {

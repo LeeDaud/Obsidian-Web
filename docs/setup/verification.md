@@ -1,5 +1,32 @@
 # 原版集成验收记录
 
+## 应用内正式更新：实施与隔离覆盖验证
+
+- 已按用户“实施/继续”确认的计划实现，用户特别要求主体UI保持不变：仅增加本地设置中的更新区和同主题原生更新页，不修改原Memos生产页面、首页/编辑器/侧栏/卡片、字体或配色。原NativeAccount设置按钮仅增加暂存等待保护，不更换样式。
+- 原生`update/`模块读取固定公开仓库稳定Release，清单绑定同Release APK；网络不使用Memos/GitHub投递凭据，HTTPS/主机/跳转/时间/大小有界。严格验证清单数值、APK完整摘要/包名/版本/系统要求/正式属性/签名；异常回复不暴露私有路径或临时签名下载地址。旧Release无清单明确提示，不从tag猜测构建号。
+- 安装入口采用系统确认及受限FileProvider，只允许更新缓存；先等待所有活跃/未完成/失败待重试的设备草稿及附件暂存。原生主框架nonce确认，导航/销毁/55秒超时失效；原生回退在私有草稿保存确认后打开更新页。系统取消可靠回执清除安装检查点；进程重启而结果不确定则保护缓存，必须明确确认取消。成功依据实际安装构建号，不宣称仅打开安装器就是成功。
+- `node node_modules/typescript/bin/tsc --project apps/android/local-ui/tsconfig.json --noEmit`和任务解析回归通过；`verify-updates.ts`覆盖更新设置/检查/进度/取消、暂存失败阻止安装/恢复、授权提示、安装取消确认、缺清单发布页与320/390/430浅深色；pageerror=0。既有格式、图片、保存、附件菜单、离线复制与解析导入断言一并通过。截图/结果在忽略`app/build/android-qa/local-ui/updater/`。
+- 调试新增边界/全量回归100项通过（页面测试/异常脱敏随后加入，最终以正式102项为准）；最终`release-signing.ps1 -Action Build`执行testReleaseUnitTest/lintRelease/assembleRelease，102项单元0失败/错误，Lint 0错误/26警告。包含正式渠道/非法URL/重定向/容量/取消、版本/包名/签名/调试属性、暂存确认失效、更新页实际渲染及异常隐私保护。设备验收发现原生更新页用了图标库未收录的名称，已复用现有图标修复并补渲染回归；没有修改主体图标库。
+- 全新隔离`echo-update-qa`（API35，emulator-5558）只使用已有镜像和新建合成数据，不擦除既有AVD。正式code9保存`UPGRADE_NOTE_20261013`、29字节关联文本附件，并暂存`UPGRADE_DRAFT_20261013`；正式同签名code10覆盖通过。Room笔记元数据、Markdown/附件SHA256与设备草稿保留，队列保持空且未新增投递。
+- 进一步以同正式签名的测试code11（仅Gradle忽略脚本finalizeDsl修改构建号，源码仍10）在更新专用缓存暂存，验证App内重新校验→系统来源授权→系统取消保持code10→再次确认Update实际安装到11。正常桌面入口重新打开，笔记/草稿/附件正常显示；数据对照再次通过。测试APK缓存暂存为合成注入，没有向GitHub发布fixture，真实GitHub大文件下载链路仍须授权发布后验证；HTTP行为另有注入回归。没有读取私人账号、凭据或真实笔记，也没有在私人手机安装。
+- 正式交付`Echo-1.0-build10.apk`和`echo-update.json`，版本1.0/code10、非debuggable，证书SHA256仍`45378e4549cad3bda81e532a576e29ffac4515894d3e58a23bd989ba718b6490`，apksigner v2核验通过；APK SHA256=`aacb515b8158a112b20d2826873afcb49f16ace04851f58888a9550c2c70c69f`，12,520,325字节。清单由已核验正式包自动生成，后续重建摘要以新产物为准。
+- ss-review增量：Pass。更新区使用原SettingSection/Button、语义色、44px按钮、明确状态与取消/重试、焦点样式及三宽度无溢出；目视浅深色小屏截图。原生页使用原MemosTheme/字体/按钮/已收录图标及实际安全区；原版风格优先，未应用仪表盘重绘。既有StyleSeed原版布局例外沿用。
+- 本轮没有提交、推送、公开发布、CI/CD、数据库迁移、密钥轮换、卸载或私人内容删除。用户首次需手动覆盖同签名带入口包；之后每个正式Release同时上传APK与清单，实际用户手机覆盖仍由用户核验。
+
+## 2026-10-13 Android APP三项交互优化
+
+用户确认既有验收已完成，后续以APP优化为重心；本节记录三项新增改动的实际验证，不改写历史证据。三项方案已在plan确认后实施，不修改上游生产页面。
+
+- 编辑框：APK专用CSS隐藏CodeMirror滚动条，overflow仍为auto。浏览器100行正文高2400px、可视高422px、scrollTop=1978，光标末尾追加输入通过，不截断正文。
+- 心情：后端MEMO_RELATED设置提供16种表情；原选择器支持添加/取消、忙碌禁用和失败提示。版本化AtomicFile本机元数据在后端重开后恢复；定向测试确认冻结正文、Markdown字节、投递快照及调度次数不变，远端/归档/非法资源拒绝。浏览器添加、重开、取消、失败保留弹窗与重试通过，选项稳定触控尺寸44×44。
+- 任务：原内置筛选入口替换为日历下方任务区，遍历完整可读列表，独立于主页筛选；CommonMark/GFM AST识别嵌套/编号/引用待办，排除代码/转义示例及归档。未完成优先，已完成可折叠，点击进入来源。54条合成记录验证第51条分页外任务、远端只读任务、勾选后重新读取、错误重试；任务区不写正文。
+- 命令：`node node_modules/typescript/bin/tsc --project apps/android/local-ui/tsconfig.json --noEmit`、`node --import tsx apps/android/local-ui/tasks.test.ts`、Vite本地UI构建、`node --import tsx apps/android/local-ui/verify-optimizations.ts`、既有`verify.ts`均通过；新增浏览器9组检查、pageerror=0、320/390/430浅深色任务与表情共12张截图。图片/结果在忽略的`app/build/android-qa/local-ui/optimizations/`。
+- 安卓：`gradlew.bat --offline --no-daemon assembleDebug testDebugUnitTest lintDebug`通过；94项单元测试，0失败/错误（后端定向21项）。Lint 0错误/17警告；保留既有工具链/依赖建议，不宣称整体无警告。Vite保留原CSS highlight/大chunk提示；补明确react-router-dom运行时别名，避免当前构建器误读tsconfig的声明文件路径。
+- APK：`apps/android/app/build/outputs/apk/debug/app-debug.apk`，版本1.0/code8，调试签名；apksigner v2核验通过，345项本地UI资产逐项SHA256一致，差异0。APK SHA256=`8785a503c0a03b8789f17ae3e8e09d60fa36ad820e8c7c9b0a8d14d058d422ac`。未安装私人手机或生成本轮正式签名发布物。
+- ss-review（新增界面范围）：Pass。已按`D:/AAA-Project/000-styleseed/engine/.claude/skills/ss-review/SKILL.md`审查：复用原侧栏/Popover、语义颜色、named export/data-slot/className、焦点样式、任务状态/错误语义、44px触控和三宽度无溢出；目视浅色390/深色320侧栏与表情截图。原版布局/字体/间距优先，不套通用仪表盘重绘；新增任务区无动画，表情弹窗沿用原组件动效。
+- 目录编号修复：用户确认当前目录007，原位修复1484个Memos/本地UI依赖junction及7个Ignis工作区junction，项目扫描1492个链接中旧目录引用0；pnpm缓存元数据和生成命令路径同步，包版本/字节不升级，文件/目录不删除，当前路径文档更新。初次受限环境检查遇到Gradle缓存锁、Vite realpath权限限制，采用获批本机验证后成功；没有绕过审核。
+- 本轮无提交、推送、发布、生产/CI/CD或数据库迁移。真机使用由用户接收本轮优化包后核验，不用浏览器/单元测试代替硬件证据。
+
 ## 2026-10-11 1.0 版本、默认界面与签名候选验收
 
 - 用户明确授权版本号精确1.0、默认本地原Web组件和验收，CLAUDE/AGENTS同步当前授权，覆盖旧默认开关门槛。versionCode=8；debug/release LOCAL_UI_DEFAULT=true、QA旧Compose默认false。原生设置仍独立；低WebView回退直接打开原生首页并保存本次回退到重建状态，修复默认true时旧recreate返回循环。

@@ -32,6 +32,23 @@ class LocalUiPlatform(private val activity: ComponentActivity) {
     private var resolvingPick = false
     private val pickedFiles = LocalUiPickedFiles(activity)
     var refreshAfterSettings = false
+    private val updates by lazy { xyz.leedaud.echo.update.AppUpdates.get(activity) }
+    private var webDark = false
+    private val updateInstaller = activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { updates.installerReturned(it.resultCode) }
+    var requestUpdateDrafts: ((String) -> Unit)? = null
+    private var updatePreparation: Pair<String, (Boolean) -> Unit>? = null
+    private val updateHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    fun cancelUpdatePreparation() {
+        val pending = updatePreparation; updatePreparation = null
+        pending?.second?.invoke(false)
+    }
+    private fun confirmUpdateDrafts(complete: (Boolean) -> Unit) {
+        if (updatePreparation != null || requestUpdateDrafts == null) { complete(false); return }
+        val nonce = java.util.UUID.randomUUID().toString()
+        updatePreparation = nonce to complete
+        updateHandler.postDelayed({ if (updatePreparation?.first == nonce) cancelUpdatePreparation() }, 55000)
+        requestUpdateDrafts!!.invoke(nonce)
+    }
     var resolveFile: ((String) -> Pair<String, File>)? = null
     private val picker = activity.registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         val callback = files; files = null
@@ -87,6 +104,53 @@ class LocalUiPlatform(private val activity: ComponentActivity) {
     fun handle(command: String, input: JSONObject, reply: (JSONObject?, String?) -> Unit) {
         if (destroyed) { reply(null, "页面已关闭"); return }
         when (command) {
+            "platform.update.status", "platform.update.check", "platform.update.download", "platform.update.cancel", "platform.update.auto" -> {
+                runCatching {
+                    when (command) {
+                        "platform.update.check" -> updates.check()
+                        "platform.update.download" -> updates.download()
+                        "platform.update.cancel" -> updates.cancel()
+                        "platform.update.auto" -> updates.autoCheck()
+                    }
+                    updates.status()
+                }.onSuccess { reply(it, null) }.onFailure { reply(null, it.message ?: "更新操作未完成") }
+            }
+            "platform.update.open" -> {
+                confirmUpdateDrafts { saved ->
+                    if (!saved || destroyed) reply(null, "设备暂存尚未确认，请返回编辑器暂存后再更新")
+                    else {
+                        activity.startActivity(Intent(activity, xyz.leedaud.echo.update.UpdateActivity::class.java).putExtra("drafts-confirmed", true).putExtra("update-dark", webDark))
+                        reply(JSONObject().put("opened", true), null)
+                    }
+                }
+            }
+            "platform.update.drafts-ready" -> {
+                val pending = updatePreparation
+                if (pending == null || pending.first != input.optString("nonce")) { reply(null, "暂存确认已失效"); return }
+                updatePreparation = null
+                reply(JSONObject().put("confirmed", true), null)
+                pending.second(input.optBoolean("saved"))
+            }
+            "platform.update.confirm-cancel" -> {
+                runCatching { updates.confirmInstallationCancelled(); updates.status() }.onSuccess { reply(it, null) }.onFailure { reply(null, it.message) }
+            }
+            "platform.update.releases" -> {
+                runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(xyz.leedaud.echo.update.UpdatePolicy.PAGE))) }
+                    .onSuccess { reply(JSONObject().put("opened", true), null) }.onFailure { reply(null, "无法打开发布页") }
+            }
+            "platform.update.install" -> {
+                confirmUpdateDrafts { saved ->
+                if (!saved || destroyed) { reply(null, "设备暂存尚未确认，未启动安装"); return@confirmUpdateDrafts }
+                runCatching {
+                    updates.prepareInstall { intent, error -> activity.runOnUiThread {
+                        if (destroyed || activity.isFinishing || activity.isDestroyed) { updates.launchFailed(); reply(null, "页面已关闭，请重新确认安装") }
+                        else if (error != null) reply(null, error)
+                        else runCatching { updateInstaller.launch(intent!!); updates.status() }.onSuccess { reply(it, null) }
+                            .onFailure { updates.launchFailed(); reply(null, "无法打开系统安装界面") }
+                    } }
+                }.onFailure { reply(null, it.message ?: "安装未完成，请重试") }
+                }
+            }
             "platform.choose" -> {
                 if (files != null || chooseReply != null || resolvingPick) { reply(null, "请先完成当前文件选择"); return }
                 val accept = input.optString("accept")
@@ -126,6 +190,7 @@ class LocalUiPlatform(private val activity: ComponentActivity) {
                 reply(JSONObject().put("copied", true), null)
             }
             "platform.theme" -> {
+                webDark = input.optBoolean("dark")
                 androidx.core.view.WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply {
                     isAppearanceLightStatusBars = !input.optBoolean("dark"); isAppearanceLightNavigationBars = !input.optBoolean("dark")
                 }
@@ -170,6 +235,7 @@ class LocalUiPlatform(private val activity: ComponentActivity) {
     fun destroy() {
         if (destroyed) return
         destroyed = true
+        cancelUpdatePreparation()
         cancelSelection()
         val callback = permission; permission = null; callback?.invoke(false)
         microphoneRequest = null

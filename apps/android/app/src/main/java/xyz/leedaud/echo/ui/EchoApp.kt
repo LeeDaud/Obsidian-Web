@@ -594,6 +594,12 @@ private fun Color.toArgbCompat(): Int = android.graphics.Color.argb((alpha * 255
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("设置", style = MaterialTheme.typography.titleLarge)
         MemosButton("连接原 Memos", "link", onClick = connectMemos)
+        val updateContext = LocalContext.current
+        val updateDark = theme == "深色" || (theme == "系统" && isSystemInDarkTheme())
+        MemosButton("应用更新", "download", enabled = state.ready && !state.busy, onClick = {
+            model.prepareAppUpdate { updateContext.startActivity(Intent(updateContext, xyz.leedaud.echo.update.UpdateActivity::class.java)
+                .putExtra("drafts-confirmed", true).putExtra("update-dark", updateDark)) }
+        })
         Text("外观", style = MaterialTheme.typography.titleMedium)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("系统" to "monitor", "浅色" to "sun", "深色" to "moon").forEach { (label, icon) ->

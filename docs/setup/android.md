@@ -1,6 +1,8 @@
 # Android 独立 App：安装、配置与验证
 
-版本：0.4.0-preview2 / versionCode6（阶段内部调试包） · 日期：2026-10-09。
+当前本地候选：1.0 / versionCode10（沿用原正式签名），包含本地原组件和应用内更新；尚未公开发布。安装与后续发布方式以末尾“应用内正式更新”节为准。
+
+以下预览阶段说明原记录版本为0.4.0-preview2 / versionCode6（2026-10-09），保留作历史参考。
 
 GitHub预发布 `v0.4.0-preview2` 已按用户授权发布，指向f56ad20。当前继续验收产生的权限、录音MIME和暂存故障修复仅在本地工作树中，尚未提交推送或替换该Release附件；不要把已下载的包视为包含本轮修复。完整验收和默认入口切换仍见核对表。
 
@@ -108,3 +110,22 @@ adb shell am instrument -w -e class xyz.leedaud.echo.NativeOfflineTest xyz.leeda
 纯逻辑、mock GitHub、Room 内存/磁盘、文件恢复与 Robolectric 原生输入/暂存/保存/列表已有回归；构建、Lint 和最终签名/包内容核验见 [verification.md](verification.md)。
 
 已有 API26 原生回归及 API35 本地 WebView 合成验证；真实账号、专用 GitHub 仓库发布、电脑接收、真实手机、最低WebView、1000 条记录性能、横竖屏/字体缩放及正式签名升级仍未验收。本地界面已实现，不等于这些端到端门槛已通过。
+# 应用内正式更新
+
+本地候选1.0（内部构建10）加入更新功能。已有正式1.0用户首次需手动覆盖安装同签名的`Echo-1.0-build10.apk`，不要卸载或清数据；之后在设置的“应用更新”检查、下载并确认系统覆盖安装。原生设置/低WebView回退也提供入口，现有主体UI风格不改。
+
+更新只读取`LeeDaud/Obsidian-Web`正式GitHub Release，不使用笔记仓库或投递凭据。每次发布递增内部versionCode，沿用原正式密钥与应用ID；正式APK和`echo-update.json`必须放在同一稳定Release，清单的APK资产名必须保持一致，不标为draft/prerelease，不覆盖已有发布物。当前公开v1.0尚无清单，App会明确提示发布方尚未提供应用内更新包。
+
+使用现有签名构建脚本即可在本机生成两项资产，不会自动发布：
+
+```powershell
+$env:JAVA_HOME = 'D:/AAA-Project/000-dependencies/jdk21/jdk-21.0.10+7'
+$env:ANDROID_HOME = 'C:/Users/10159/AppData/Local/Android/Sdk'
+./apps/android/release-signing.ps1 -Action Build -JavaHome $env:JAVA_HOME
+```
+
+产物位于`apps/android/app/build/outputs/apk/release/`。发布前核对`echo-update.json`中的versionCode、apkAssetName、size和sha256；修改更新说明可重新运行`write-update-manifest.ps1 -ReleaseNotes '本次改动说明'`，不要手工填写错误摘要。发布、推送、CI/CD仍需另行明确授权。
+
+下载仅在用户点击后执行；APK完整摘要、包名、内部版本、最低系统与当前签名一致性通过才交给系统。安装前确认设备草稿和附件暂存，失败则停止安装。首次系统可能要求“允许来自Echo的安装”，授权返回后再次点击安装。取消保留原App；安装状态不确定时，先在系统界面取消，再在App确认。成功以实际已安装构建号判断，不将打开安装器当作更新完成。
+
+更新缓存仅位于私有cacheDir/app-updates，与笔记、草稿、附件、队列分离。测试证据见verification；不使用真实账号/私人手机冒充完成验证。

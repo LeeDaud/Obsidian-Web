@@ -32,6 +32,26 @@ class LocalUiPlatformTest {
         controller.start().resume()
     }
     @After fun close() { platform.destroy(); controller.pause().stop().destroy() }
+    @Test fun updateOpenRequiresCurrentDraftConfirmationAndNavigationCancels() {
+        var nonce = ""
+        platform.requestUpdateDrafts = { nonce = it }
+        var error: String? = null
+        platform.handle("platform.update.open", JSONObject()) { _, failure -> error = failure }
+        assertNull(shadowOf(activity).nextStartedActivity)
+        platform.handle("platform.update.drafts-ready", JSONObject().put("nonce", "wrong").put("saved", true)) { _, failure -> assertNotNull(failure) }
+        assertNull(shadowOf(activity).nextStartedActivity)
+        platform.cancelUpdatePreparation()
+        assertNotNull(error)
+        platform.handle("platform.update.open", JSONObject()) { _, failure -> error = failure }
+        platform.handle("platform.update.drafts-ready", JSONObject().put("nonce", nonce).put("saved", false)) { _, failure -> assertNull(failure) }
+        assertNotNull(error); assertNull(shadowOf(activity).nextStartedActivity)
+        platform.handle("platform.update.open", JSONObject()) { _, failure -> error = failure }
+        platform.handle("platform.update.drafts-ready", JSONObject().put("nonce", nonce).put("saved", true)) { _, failure -> assertNull(failure) }
+        assertNull(error)
+        val opened = shadowOf(activity).nextStartedActivity
+        assertEquals("xyz.leedaud.echo.update.UpdateActivity", opened.component?.className)
+        assertTrue(opened.getBooleanExtra("drafts-confirmed", false))
+    }
     private class Request(private val source: String, private val types: Array<String>) : PermissionRequest() {
         var grants = 0
         var denies = 0

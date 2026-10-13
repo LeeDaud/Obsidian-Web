@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useEditorStore } from "@/components/MemoEditor/state";
-import { persistEditorDraft, clearEditorDraft } from "./drafts";
+import { persistEditorDraft, clearEditorDraft, registerDraftFlusher } from "./drafts";
 import { editorChanged } from "./model";
 
 export function useAutoSave(username: string, cacheKey?: string, enabled = true, baseRevision?: string) {
@@ -25,9 +25,10 @@ export function useAutoSave(username: string, cacheKey?: string, enabled = true,
     };
     changed();
     const unsubscribe = store.subscribe(changed);
+    const unregister = registerDraftFlusher(key, async () => { clearTimeout(timer.current); await persist(); });
     const flush = () => { clearTimeout(timer.current); void persist().catch(() => {}); };
     window.addEventListener("pagehide", flush);
-    return () => { unsubscribe(); flush(); window.removeEventListener("pagehide", flush); };
+    return () => { unsubscribe(); unregister(); flush(); window.removeEventListener("pagehide", flush); };
   }, [enabled, store, persist]);
   const saveDraft = useCallback(async () => { clearTimeout(timer.current); discarded.current = false; await persist(); }, [persist]);
   const discardDraft = useCallback(() => { discarded.current = true; clearTimeout(timer.current); void clearEditorDraft(key); }, [key]);

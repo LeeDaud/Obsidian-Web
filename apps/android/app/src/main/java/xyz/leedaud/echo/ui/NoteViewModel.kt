@@ -82,6 +82,19 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
             mutable.update { it.copy(draftSaved = it.draft == draft, message = "已暂存到本机，没有上传") }
         }
     }
+    fun prepareAppUpdate(ready: () -> Unit) {
+        if (!mutable.value.ready || mutable.value.busy) return
+        val draft = mutable.value.draft
+        autosave?.cancel()
+        operation {
+            draft.attachments.forEach { repository.verifyAttachment(it) }
+            repository.saveDraft(draft)
+            repository.select(draft)
+            check(mutable.value.draft == draft) { "输入已变化，请再次暂存后更新" }
+            mutable.update { it.copy(draftSaved = true) }
+            withContext(kotlinx.coroutines.Dispatchers.Main) { ready() }
+        }
+    }
     fun save() {
         if (mutable.value.busy) return
         val draft = mutable.value.draft

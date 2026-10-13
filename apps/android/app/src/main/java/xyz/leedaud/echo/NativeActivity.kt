@@ -74,6 +74,7 @@ class NativeActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (!webMode) model.refreshStatuses()
+        if (!webMode) xyz.leedaud.echo.update.AppUpdates.get(this).autoCheck()
         else if (platform?.refreshAfterSettings == true && localWeb != null) { platform!!.refreshAfterSettings = false; localWeb!!.reload() }
     }
     override fun onDestroy() { platform?.destroy(); localWeb?.destroy(); localWeb = null; super.onDestroy() }

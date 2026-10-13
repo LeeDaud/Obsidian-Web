@@ -4,4 +4,5 @@
     <files-path name="memos_history" path="memos-history/" />
     <cache-path name="shared_images" path="share/" />
     <cache-path name="memos_view" path="memos-view/" />
+    <cache-path name="app_updates" path="app-updates/" />
 </paths>

@@ -127,6 +127,7 @@ try {
             & ./gradlew.bat --offline --no-daemon --no-configuration-cache --no-build-cache testReleaseUnitTest lintRelease assembleRelease
             if ($LASTEXITCODE -ne 0) { throw 'Signed release validation failed. No publication performed.' }
         } finally { Pop-Location }
+        & (Join-Path $PSScriptRoot 'write-update-manifest.ps1') -JavaHome $JavaHome
         Write-Output 'Local signed candidate built. Version and UI mode follow build.gradle; no publication, installation or data migration performed.'
     }
 } finally {

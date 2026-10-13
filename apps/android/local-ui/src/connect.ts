@@ -15,6 +15,7 @@ import { rewriteLocalFiles } from "./drafts";
 import { profileMemo } from "./profile";
 import { publicResource } from "./public-resources";
 import { internalizeManagedImages, managedDestinationPlan } from "./managed-images";
+import { collectTasks } from "./tasks";
 const snapshots = new Map<string, any[]>();
 let queryWorker: Worker | undefined;
 const queries = new Map<string, { resolve: (names: string[]) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
@@ -34,10 +35,12 @@ function query(records: any[], input: any): Promise<string[]> {
     queryWorker!.postMessage({ id, memos: records, filter: input.filter, state: input.state, orderBy: input.orderBy });
   });
 }
-async function allMemos(): Promise<any[]> {
+async function allMemos(signal?: AbortSignal): Promise<any[]> {
   const memos: any[] = []; let offset = 0;
   for (let page = 0; page < 100; page++) {
+    signal?.throwIfAborted();
     const response = await nativeCall("local.list", { offset });
+    signal?.throwIfAborted();
     memos.push(...response.memos.map(profileMemo));
     if (JSON.stringify(memos).length > 16 * 1024 * 1024) throw new Error("列表较大，请分批读取");
     if (response.next < 0) return memos;
@@ -45,6 +48,11 @@ async function allMemos(): Promise<any[]> {
     offset = response.next;
   }
   throw new Error("记录较多，请缩小查询范围");
+}
+export async function loadSidebarTasks(signal?: AbortSignal) {
+  const records = await allMemos(signal);
+  registerMetadata(records);
+  return { tasks: collectTasks(records) };
 }
 async function listMemos(input: any) {
   let rows: any[]; let id: string; let offset = 0;
@@ -121,7 +129,7 @@ export const localFetch: typeof fetch = async (input, init) => {
     }
     if (result?.name?.startsWith("memos/")) result = profileMemo(result);
     registerMetadata(result); stripRevision(result);
-    if (/(Create|Update|Delete)Memo$/.test(command) || command === "echo.submit") snapshots.clear();
+    if (/(Create|Update|Delete)Memo$/.test(command) || /(?:Upsert|Delete)MemoReaction$/.test(command) || command === "echo.submit") snapshots.clear();
     if (command === "memos.api.v1.AuthService/SignOut") setTimeout(() => location.replace("/"), 0);
     return new Response(JSON.stringify(result), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (error) {

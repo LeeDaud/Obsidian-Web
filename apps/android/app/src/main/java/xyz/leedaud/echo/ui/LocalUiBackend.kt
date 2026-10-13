@@ -33,6 +33,39 @@ class LocalUiBackend(private val context: Context, private val repository: NoteR
     }
     private fun collection(kind: String) = json(File(root, "$kind.json"))
     private fun collectionWrite(kind: String, data: JSONObject) = write(File(root, "$kind.json"), data)
+    private val reactionTypes = listOf("😀", "😄", "🥰", "😎", "🤔", "😌", "😴", "😢", "😡", "😮", "🎉", "❤️", "👍", "👀", "✅", "💪")
+    private fun reactionState(): JSONObject {
+        val state = collection("reactions")
+        if (state.length() == 0) return JSONObject().put("version", 1).put("memos", JSONObject())
+        if (state.optInt("version") != 1 || state.optJSONObject("memos") == null) throw LocalUiFailure("本机心情记录无法读取，请保留数据并重试")
+        return state
+    }
+    private fun memoSetting(resource: String) = JSONObject().put("name", resource).apply {
+        if (resource == "instance/settings/MEMO_RELATED") put("memoRelatedSetting", JSONObject().put("reactions", JSONArray(reactionTypes)))
+    }
+    private fun upsertReaction(input: JSONObject): JSONObject {
+        val memo = note(input.getString("name"))
+        if (memo.archived) throw LocalUiFailure("归档笔记不能添加心情")
+        val type = input.getJSONObject("reaction").getString("reactionType")
+        if (type !in reactionTypes) throw LocalUiFailure("请选择支持的心情")
+        val state = reactionState(); val memos = state.getJSONObject("memos")
+        val items = memos.optJSONObject(name(memo)) ?: JSONObject()
+        val id = digest(type.toByteArray(Charsets.UTF_8))
+        val reaction = items.optJSONObject(id) ?: JSONObject().put("name", "${name(memo)}/reactions/$id")
+            .put("creator", "users/device").put("reactionType", type).put("createTime", time(System.currentTimeMillis()))
+        items.put(id, reaction); memos.put(name(memo), items); collectionWrite("reactions", state)
+        return reaction
+    }
+    private fun deleteReaction(resource: String): JSONObject {
+        val match = Regex("(memos/[A-Za-z0-9][A-Za-z0-9_-]{0,119})/reactions/([a-f0-9]{64})").matchEntire(resource)
+            ?: throw LocalUiFailure("心情标识无效")
+        val memo = note(match.groupValues[1])
+        if (memo.archived) throw LocalUiFailure("归档笔记不能修改心情")
+        val state = reactionState()
+        state.getJSONObject("memos").optJSONObject(name(memo))?.remove(match.groupValues[2])
+        collectionWrite("reactions", state)
+        return JSONObject()
+    }
     private fun space(name: String): JSONObject {
         if (!Regex("spaces/[a-f0-9-]{36}").matches(name)) throw LocalUiFailure("分组标识无效")
         return collection("spaces").optJSONObject(name) ?: throw LocalUiFailure("本机分组不存在")
@@ -130,7 +163,7 @@ class LocalUiBackend(private val context: Context, private val repository: NoteR
         val ref = attachmentRef(resource); repository.verifyAttachment(ref)
         return ref.mime to repository.file(ref.file)
     }
-    private fun memo(value: Note, related: List<Note> = repository.notes()): JSONObject {
+    private fun memo(value: Note, related: List<Note> = repository.notes(), reactions: JSONObject = reactionState()): JSONObject {
         val relations = JSONArray()
         (listOfNotNull(value.parentId) + value.referenceIds.orEmpty()).distinct().forEach { parent -> related.find { it.id == parent }?.let { original ->
             relations.put(JSONObject().put("type", "REFERENCE").put("memo", JSONObject().put("name", name(value)))
@@ -145,6 +178,9 @@ class LocalUiBackend(private val context: Context, private val repository: NoteR
             .put("createTime", time(value.created)).put("updateTime", time(value.updated)).put("state", if (value.archived) "ARCHIVED" else "NORMAL")
             .put("visibility", "PRIVATE").put("pinned", value.pinned).put("tags", JSONArray(tags(body)))
             .put("attachments", JSONArray(value.attachments.map { attachment(it, name(value)) })).put("relations", relations)
+            .put("reactions", JSONArray(reactions.getJSONObject("memos").optJSONObject(name(value))?.let { items ->
+                items.keys().asSequence().map { items.getJSONObject(it) }.toList()
+            }.orEmpty()))
             .put("property", JSONObject().put("hasTaskList", Regex("(?m)^\\s*[-*+] \\[[ xX]] ").containsMatchIn(body))
                 .put("hasIncompleteTasks", Regex("(?m)^\\s*[-*+] \\[ ] ").containsMatchIn(body)).put("hasLink", body.contains("https://") || body.contains("http://"))
                 .put("hasCode", body.contains('`')))
@@ -280,7 +316,8 @@ class LocalUiBackend(private val context: Context, private val repository: NoteR
         }
         "local.list" -> {
             val notes = repository.notes()
-            val all = notes.map { memo(it, notes) } + remote?.snapshot().orEmpty()
+            val reactions = reactionState()
+            val all = notes.map { memo(it, notes, reactions) } + remote?.snapshot().orEmpty()
             val offset = input.optInt("offset")
             if (offset !in 0..all.size) throw LocalUiFailure("列表已变化，请刷新")
             JSONObject().put("memos", JSONArray(all.drop(offset).take(50))).put("next", if (offset + 50 < all.size) offset + 50 else -1)
@@ -402,8 +439,13 @@ class LocalUiBackend(private val context: Context, private val repository: NoteR
             settings.put(field, setting.getJSONObject(field)); write(file, settings); setting
         }
         "memos.api.v1.InstanceService/GetInstanceProfile" -> JSONObject().put("version", "echo-local").put("admin", user()).put("accessMode", "PRIVATE")
-        "memos.api.v1.InstanceService/GetInstanceSetting" -> JSONObject().put("name", input.optString("name"))
-        "memos.api.v1.InstanceService/BatchGetInstanceSettings" -> JSONObject().put("settings", JSONArray())
+        "memos.api.v1.InstanceService/GetInstanceSetting" -> memoSetting(input.optString("name"))
+        "memos.api.v1.InstanceService/BatchGetInstanceSettings" -> {
+            val names = input.optJSONArray("names") ?: JSONArray()
+            JSONObject().put("settings", JSONArray((0 until names.length()).map { memoSetting(names.getString(it)) }))
+        }
+        "memos.api.v1.MemoService/UpsertMemoReaction" -> upsertReaction(input)
+        "memos.api.v1.MemoService/DeleteMemoReaction" -> deleteReaction(input.getString("name"))
         "memos.api.v1.SpaceService/ListSpaces" -> collection("spaces").let { groups -> JSONObject().put("spaces", JSONArray(groups.keys().asSequence().map { groups.getJSONObject(it) }.toList())) }
         "memos.api.v1.SpaceService/GetSpace" -> space(input.getString("name"))
         "memos.api.v1.SpaceService/CreateSpace", "memos.api.v1.SpaceService/UpdateSpace" -> {

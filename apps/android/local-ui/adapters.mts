@@ -15,6 +15,39 @@ export function nativeAdapters() {
     },
     transform(code: string, id: string) {
       const file = id.replaceAll("\\", "/").split('?')[0];
+      if (file.endsWith("/AppSidebar/AppSidebar.tsx")) {
+        code = `import { SidebarTasks } from '${source}/SidebarTasks';\n${code}`;
+        code = inject(code, '{currentUser && <ViewsSection />}', '{currentUser && <SidebarTasks />}\n      {currentUser && <ViewsSection />}');
+      }
+      if (file.endsWith("/AppSidebar/ViewsSection.tsx")) {
+        const start = code.indexOf('      <SidebarRow\n        state={!manageActive && selectedMemoView === BUILTIN_TASKS_VIEW_ID');
+        const end = code.indexOf('      {memoViews.map', start);
+        if (start < 0 || end < 0) throw new Error("Original tasks view adapter anchor changed");
+        code = code.slice(0, start) + code.slice(end);
+      }
+      if (file.endsWith("/MemoReactionListView/hooks.ts")) {
+        code = `import toast from 'react-hot-toast';\nimport { isRemoteMemo } from '${source}/model';\nimport { useRef, useState } from 'react';\n${code}`;
+        code = inject(code, '  const hasReacted =', '  const [busy, setBusy] = useState(false);\n  const pending = useRef(false);\n  const hasReacted =');
+        code = inject(code, '    if (!currentUser) return;', '    if (!currentUser || isRemoteMemo(memo.name) || pending.current) return;\n    pending.current = true; setBusy(true);');
+        code = inject(code, '    } catch {\n      // skip error\n    }\n    onComplete?.();', '      onComplete?.();\n    } catch (error) {\n      toast.error(error instanceof Error ? error.message : "心情保存未完成，请重试");\n    } finally {\n      pending.current = false; setBusy(false);\n    }');
+        code = inject(code, 'return { hasReacted, handleReactionClick };', 'return { hasReacted, handleReactionClick, busy };');
+      }
+      if (file.endsWith("/MemoReactionListView/ReactionSelector.tsx")) {
+        code = `import { isRemoteMemo } from '${source}/model';\n${code}`;
+        code = inject(code, '{ hasReacted, handleReactionClick }', '{ hasReacted, handleReactionClick, busy }');
+        code = inject(code, '  return (', '  if (isRemoteMemo(memo.name)) return null;\n  return (');
+        code = inject(code, '              key={reactionType}', '              key={reactionType}\n              disabled={busy}\n              aria-pressed={hasReacted(reactionType)}\n              aria-label={`心情 ${reactionType}`}');
+        code = inject(code, 'inline-flex w-auto text-base', 'inline-flex min-h-11 min-w-11 items-center justify-center w-auto text-xl');
+        code = inject(code, 'transition-colors",', 'transition-colors focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50",');
+        code = inject(code, '      <PopoverContent align="center"', '      <PopoverContent data-echo-reaction-picker align="center"');
+      }
+      if (file.endsWith("/MemoReactionListView/ReactionView.tsx")) {
+        code = `import { isRemoteMemo } from '${source}/model';\n${code}`;
+        code = inject(code, 'const { handleReactionClick }', 'const { handleReactionClick, busy }');
+        code = inject(code, 'Boolean(currentUser) && !readonly', 'Boolean(currentUser) && !readonly && !isRemoteMemo(memo.name)');
+        code = inject(code, '                aria-pressed={hasReaction}', '                aria-pressed={hasReaction}\n                disabled={busy}\n                aria-label={`取消心情 ${reactionType}`}');
+        code = inject(code, 'inline-flex h-7 shrink-0', 'inline-flex h-7 pointer-coarse:min-h-11 pointer-coarse:min-w-11 shrink-0');
+      }
       if (file.endsWith("/utils/managed-attachment.ts")) {
         code = inject(code, "const UID_PATTERN = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,34}[a-zA-Z0-9])?$/;",
           "const UID_PATTERN = /^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,34}[a-zA-Z0-9])?|r-[a-f0-9]{64})$/;");

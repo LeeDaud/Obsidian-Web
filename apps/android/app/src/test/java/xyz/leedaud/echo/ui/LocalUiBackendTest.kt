@@ -30,6 +30,43 @@ class LocalUiBackendTest {
         backend = LocalUiBackend(context, repo, { schedules++ }, File(root, "bridge"))
     }
     @After fun close() { db.close() }
+    @Test fun reactionsSurviveReopenWithoutChangingFrozenNoteOrQueue() {
+        val memo = create("心情合成笔记")
+        val name = memo.getString("name")
+        repo.setTarget(Target("synthetic", "owner", "repo", "main", 1, true))
+        repo.enqueue(repo.notes().single().id)
+        val note = repo.notes().single(); val job = repo.deliveries().single()
+        val bytes = repo.file(note.file).readBytes(); val beforeSchedules = schedules
+        val input = JSONObject().put("name", name).put("reaction", JSONObject().put("reactionType", "😄").put("creator", "users/other"))
+        val reaction = backend.request("memos.api.v1.MemoService/UpsertMemoReaction", input) as JSONObject
+        assertEquals("users/device", reaction.getString("creator"))
+        assertEquals(reaction.toString(), backend.request("memos.api.v1.MemoService/UpsertMemoReaction", input).toString())
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val reopened = LocalUiBackend(context, repo, { schedules++ }, File(root, "bridge"))
+        val read = reopened.request("memos.api.v1.MemoService/GetMemo", JSONObject().put("name", name)) as JSONObject
+        assertEquals(1, read.getJSONArray("reactions").length())
+        assertEquals("😄", read.getJSONArray("reactions").getJSONObject(0).getString("reactionType"))
+        assertEquals(note, repo.notes().single()); assertEquals(job, repo.deliveries().single())
+        assertArrayEquals(bytes, repo.file(note.file).readBytes()); assertEquals(beforeSchedules, schedules)
+        reopened.request("memos.api.v1.MemoService/DeleteMemoReaction", JSONObject().put("name", reaction.getString("name")))
+        reopened.request("memos.api.v1.MemoService/DeleteMemoReaction", JSONObject().put("name", reaction.getString("name")))
+        assertEquals(0, (backend.request("memos.api.v1.MemoService/GetMemo", JSONObject().put("name", name)) as JSONObject).getJSONArray("reactions").length())
+    }
+    @Test fun reactionPaletteAndInvalidResourcesAreProtected() {
+        val settings = backend.request("memos.api.v1.InstanceService/BatchGetInstanceSettings", JSONObject().put("names",
+            org.json.JSONArray().put("instance/settings/MEMO_RELATED"))) as JSONObject
+        assertEquals(16, settings.getJSONArray("settings").getJSONObject(0).getJSONObject("memoRelatedSetting").getJSONArray("reactions").length())
+        val memo = create("source")
+        val input = JSONObject().put("name", memo.getString("name")).put("reaction", JSONObject().put("reactionType", "unknown"))
+        assertThrows(LocalUiFailure::class.java) { backend.request("memos.api.v1.MemoService/UpsertMemoReaction", input) }
+        input.getJSONObject("reaction").put("reactionType", "❤️")
+        input.put("name", "memos/r-remote")
+        assertThrows(LocalUiFailure::class.java) { backend.request("memos.api.v1.MemoService/UpsertMemoReaction", input) }
+        assertThrows(LocalUiFailure::class.java) { backend.request("memos.api.v1.MemoService/DeleteMemoReaction", JSONObject().put("name", "../../reactions/test")) }
+        val note = repo.notes().single(); repo.updateNote(note.copy(archived = true)); input.put("name", memo.getString("name"))
+        assertThrows(LocalUiFailure::class.java) { backend.request("memos.api.v1.MemoService/UpsertMemoReaction", input) }
+        assertFalse(File(root, "bridge/reactions.json").exists())
+    }
     private fun create(body: String) = backend.request("memos.api.v1.MemoService/CreateMemo", JSONObject().put("memo", JSONObject().put("content", body).put("visibility", "PRIVATE"))) as JSONObject
     @Test fun localBootstrapContainsNoCredentialsAndNoQueue() {
         val data = backend.request("local.bootstrap", JSONObject()).toString()
